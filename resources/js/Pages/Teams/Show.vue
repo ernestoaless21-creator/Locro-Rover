@@ -10,6 +10,7 @@ const props = defineProps({
   tasks: { type: Array, required: true },
   year: { type: Object, required: true },
   canManage: { type: Boolean, required: true },
+  canImport: { type: Boolean, default: false },
 })
 
 const TEAM_LABELS = {
@@ -261,11 +262,20 @@ function destroyItem(task, item) {
       </div>
 
       <!-- Encabezado del checklist -->
-      <div class="mb-4 flex items-center justify-between">
-        <h3 class="font-semibold text-gray-700">Checklist de tareas</h3>
-        <span v-if="totalCount > 0" class="text-sm text-gray-500">
-          {{ completedCount }} de {{ totalCount }} tareas completadas
-        </span>
+      <div class="mb-4 flex items-center justify-between gap-4">
+        <h3 class="font-semibold text-gray-700 shrink-0">Checklist de tareas</h3>
+        <div class="flex items-center gap-4 min-w-0">
+          <span v-if="totalCount > 0" class="text-sm text-gray-500 shrink-0">
+            {{ completedCount }} de {{ totalCount }} tareas completadas
+          </span>
+          <a
+            v-if="canImport"
+            :href="route('teams.import', { team: team, target_year_id: year.id })"
+            class="text-xs text-indigo-500 hover:text-indigo-700 hover:underline shrink-0 whitespace-nowrap"
+          >
+            Importar desde otra edición
+          </a>
+        </div>
       </div>
 
       <!-- Formulario crear tarea -->
@@ -652,6 +662,7 @@ function destroyItem(task, item) {
       </div>
 
       <p v-else class="text-center text-gray-500 py-12">No hay tareas para esta edición.</p>
+
     </div>
   </AppLayout>
 </template>

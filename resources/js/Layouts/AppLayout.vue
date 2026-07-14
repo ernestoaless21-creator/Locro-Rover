@@ -126,6 +126,8 @@ const logout = () => {
                                         <DropdownLink :href="route('teams.show', 'compras')">Compras</DropdownLink>
                                         <DropdownLink :href="route('teams.show', 'infraestructura')">Infraestructura</DropdownLink>
                                         <DropdownLink :href="route('teams.show', 'publicidad')">Publicidad</DropdownLink>
+                                        <div class="border-t border-gray-100 my-1" />
+                                        <DropdownLink :href="route('teams.import')">Importar tareas</DropdownLink>
                                     </template>
                                 </Dropdown>
                             </div>
@@ -315,6 +317,7 @@ const logout = () => {
                             <ResponsiveNavLink :href="route('teams.show', 'compras')" :active="$page.url.startsWith('/teams/compras')">Compras</ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('teams.show', 'infraestructura')" :active="$page.url.startsWith('/teams/infraestructura')">Infraestructura</ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('teams.show', 'publicidad')" :active="$page.url.startsWith('/teams/publicidad')">Publicidad</ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('teams.import')" :active="$page.url.startsWith('/teams/import')">Importar tareas</ResponsiveNavLink>
                         </template>
                     </div>
 

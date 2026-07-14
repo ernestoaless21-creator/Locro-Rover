@@ -12,6 +12,7 @@ use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\PendingApprovalController;
 use App\Http\Controllers\PricingController;
 use App\Http\Controllers\TeamTaskController;
+use App\Http\Controllers\TeamTaskImportController;
 use App\Http\Controllers\TeamTaskItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\YearController;
@@ -264,6 +265,10 @@ Route::middleware([
 
     Route::post('/years/{year}/activate', [YearController::class, 'activate'])
         ->name('years.activate');
+
+    // Fase 10: importación de tareas entre ediciones.
+    Route::get('/teams/import', [TeamTaskImportController::class, 'create'])->name('teams.import');
+    Route::post('/teams/import', [TeamTaskImportController::class, 'store'])->name('teams.import.store');
 
     // Fase 9: equipos operativos y checklists de tareas.
     Route::prefix('teams/{team}')

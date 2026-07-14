@@ -35,10 +35,11 @@ class TeamTaskController extends Controller
             ->get();
 
         return Inertia::render('Teams/Show', [
-            'team' => $team,
-            'tasks' => $tasks,
-            'year' => $year->only('id', 'year', 'label'),
+            'team'      => $team,
+            'tasks'     => $tasks,
+            'year'      => $year->only('id', 'year', 'label'),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
+            'canImport' => $request->user()->can('equipos.gestionar-todos'),
         ]);
     }
 
