@@ -1,0 +1,397 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StoreOrderRequest;
+use App\Http\Requests\UpdateOrderRequest;
+use App\Http\Requests\UpdatePortionsRequest;
+use App\Models\Order;
+use App\Models\User;
+use App\Models\Year;
+use App\Services\PricingService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class OrderController extends Controller
+{
+    /**
+     * Tabla principal de pedidos del anio activo (o el ?year_id= indicado).
+     * Filtro directo por Rover via ?rover_id= (soporta un solo id; multiple
+     * seleccion se resuelve en el frontend mandando varios requests o, si
+     * se prefiere, se puede extender a ?rover_ids[]= facilmente).
+     *
+     * Un Rover sin 'pedidos.ver-todos' SOLO ve sus propios pedidos, sin
+     * importar que parametro de filtro mande en la URL (se fuerza server-side,
+     * ignorar esto seria justamente el hueco de seguridad que pidieron evitar).
+     */
+    public function index(Request $request): Response
+    {
+        Gate::authorize('viewAny', Order::class);
+
+        $year = $request->filled('year_id')
+            ? Year::findOrFail($request->get('year_id'))
+            : Year::where('is_active', true)->firstOrFail();
+
+        $user = $request->user();
+        $canViewAll = $user->can('pedidos.ver-todos');
+
+        $orders = Order::query()
+            ->with(['client:id,first_name,last_name,phone', 'rover:id,name', 'withdrawnBy:id,name', 'items', 'payments'])
+            ->where('year_id', $year->id)
+            ->when(! $canViewAll, fn ($q) => $q->where('rover_id', $user->id))
+            ->when($canViewAll && $request->filled('rover_id'), fn ($q) => $q->where('rover_id', $request->get('rover_id')))
+            ->when($request->filled('withdrawal_status'), fn ($q) => $q->where('withdrawal_status', $request->get('withdrawal_status')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->get('status')))
+            ->when($request->filled('payment_status'), function ($q) use ($request) {
+                match ($request->get('payment_status')) {
+                    'pagado' => $q->whereColumn('total_paid', '>=', 'total_amount')->where('total_amount', '>', 0),
+                    'pendiente' => $q->where('total_paid', 0),
+                    'parcial' => $q->where('total_paid', '>', 0)->whereColumn('total_paid', '<', 'total_amount'),
+                    default => null,
+                };
+            })
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $term = trim($request->get('search'));
+                $q->whereHas('client', fn ($cq) => $cq->searchTerm($term));
+            })
+            ->orderByDesc('created_at')
+            ->paginate(50)
+            ->withQueryString();
+
+        // Fase 7 (correccion 2), seccion 3: Client.general_notes, ClientAssignment.notes
+        // (seguimiento cliente+edicion) y Order.observations (logistica de ESE pedido
+        // puntual) son 3 campos semanticamente distintos, y no se fusionan (ver
+        // decision completa en el docblock de Clients/Index.vue y en el informe de
+        // esta correccion). Para que Pedidos deje de "esconder" el dato de
+        // seguimiento del cliente, se adjunta aca (solo lectura) el `notes` de la
+        // asignacion cliente/edicion de cada pedido, con UN solo query adicional
+        // (evita N+1), sin tocar Order::observations.
+        $clientIds = collect($orders->items())->pluck('client_id')->unique();
+        $assignmentNotes = \App\Models\ClientAssignment::query()
+            ->where('year_id', $year->id)
+            ->whereIn('client_id', $clientIds)
+            ->pluck('notes', 'client_id');
+
+        $orders->getCollection()->transform(function (Order $order) use ($assignmentNotes) {
+            $order->setAttribute('client_assignment_notes', $assignmentNotes->get($order->client_id));
+
+            return $order;
+        });
+
+        return Inertia::render('Orders/Index', [
+            'orders' => $orders,
+            'year' => $year,
+            'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active']),
+            // Solo se manda el listado de rovers si el usuario puede filtrar por rover;
+            // asi el frontend no recibe (ni podria mostrar) esa lista sin permiso.
+            'rovers' => $canViewAll
+                ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search'),
+            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'canAssignRover' => $user->can('pedidos.asignar-rover'),
+            'canRegisterPayment' => $user->can('pagos.registrar'),
+            'canWithdraw' => $user->can('pedidos.retirar'),
+            // Fase 7, seccion 11: contadores compactos, calculados SIEMPRE sobre
+            // TODOS los pedidos validos (no cancelados) de la edicion activa,
+            // sin importar los filtros de la tabla ni el estado de pago (ver
+            // seccion 11 del prompt: "esten pagos o no"). Misma base/criterio
+            // que usa el Dashboard, para no tener dos formulas distintas.
+            'counters' => $this->compactCounters($year, $user, $canViewAll),
+            // Nota: NO se manda ningun total agregado/financiero global aca todavia
+            // (eso es Fase 5). Cuando exista, se debe gatear con 'finanzas.ver' igual
+            // que se hizo con 'rovers' mas arriba, nunca mandarlo y ocultarlo solo en UI.
+        ]);
+    }
+
+    /**
+     * Fase 7, seccion 11. Reutiliza la misma nocion de "pedidos validos" que
+     * el Dashboard (no cancelados) y la misma fuente de verdad de atribucion
+     * personal (Order::rover_id, ver decision de arquitectura de la seccion 6).
+     */
+    protected function compactCounters(Year $year, User $user, bool $canViewAll): array
+    {
+        $activeBase = Order::query()
+            ->where('year_id', $year->id)
+            ->where('status', '!=', 'cancelado')
+            ->when(! $canViewAll, fn ($q) => $q->where('rover_id', $user->id));
+
+        $portionsTotal = (int) (clone $activeBase)->sum('total_portions');
+        $personalPortions = (int) (clone $activeBase)->where('rover_id', $user->id)->sum('total_portions');
+        $saucesTotal = (int) \App\Models\OrderItem::query()
+            ->where('product', 'salsas')
+            ->whereIn('order_id', (clone $activeBase)->select('id'))
+            ->sum('quantity');
+
+        return [
+            'portions_total' => $portionsTotal,
+            'sauces_total' => $saucesTotal,
+            'my_portions' => $personalPortions,
+        ];
+    }
+
+    /**
+     * Pantalla de alta de pedido (Orders/New.vue). Los rovers seleccionables
+     * solo se mandan si el usuario puede asignar rover; si no, el pedido queda
+     * asignado automaticamente a si mismo (ver store()).
+     */
+    public function create(Request $request): Response
+    {
+        Gate::authorize('create', Order::class);
+
+        $user = $request->user();
+
+        return Inertia::render('Orders/New', [
+            'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active', 'portion_price', 'promo_unit_price', 'amount_for_promo']),
+            'rovers' => $user->can('pedidos.asignar-rover')
+                ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'canAssignRover' => $user->can('pedidos.asignar-rover'),
+            'canExceptionalPrice' => $user->can('pedidos.precio-excepcional'),
+            // Fase 6A: permite pre-cargar cliente/edicion cuando se llega desde
+            // "Crear pedido" en la pantalla de Asignaciones (?client_id=&year_id=).
+            'preselectedClient' => $request->filled('client_id')
+                ? \App\Models\Client::find($request->integer('client_id'), ['id', 'first_name', 'last_name', 'phone', 'address'])
+                : null,
+            'preselectedYearId' => $request->integer('year_id') ?: null,
+        ]);
+    }
+
+    /**
+     * FASE 4.1: alta simplificada. El usuario solo ingresa 'portions'; las
+     * lineas de locro+salsas se arman automaticamente via
+     * PricingService::syncPortionsForOrder (precio y salsas SIEMPRE
+     * calculados en el backend, nunca confiando en lo que mande el navegador).
+     * 'advanced_items' (opcional) son las excepciones manuales de "Opciones
+     * avanzadas" (regalo/personalizado), se agregan aparte de la linea principal.
+     */
+    public function store(StoreOrderRequest $request, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    {
+        $data = $request->validated();
+        $year = Year::findOrFail($data['year_id']);
+
+        // Fase 6A: un pedido nuevo nace "sin responsable" hasta que se le
+        // asigna uno. Si no se manda rover_id (o se manda el propio), es una
+        // autoasignacion normal (cualquiera con 'pedidos.crear' puede
+        // asignarselo a si mismo). Si se manda un rover_id de OTRO usuario,
+        // eso es una asignacion directa a un tercero y requiere el permiso
+        // de transferencia ('pedidos.asignar-rover'), igual que cambiarle el
+        // responsable a un pedido ya existente (ver OrderPolicy::assignRover).
+        $targetRoverId = $data['rover_id'] ?? $request->user()->id;
+        Gate::authorize('assignRover', [new Order(['rover_id' => null]), $targetRoverId]);
+
+        $order = DB::transaction(function () use ($data, $year, $request, $pricing, $targetRoverId, $assignments) {
+            // Fase 5C: por defecto (si el frontend no manda 'take_away'), el
+            // pedido se considera retira en mano (true), no delivery. El
+            // checkbox visible en New.vue/Edit.vue es "Es delivery" (invertido):
+            // desmarcado (caso comun) -> take_away = true.
+            $order = Order::create([
+                'client_id' => $data['client_id'],
+                'year_id' => $data['year_id'],
+                'rover_id' => $targetRoverId,
+                'take_away' => $data['take_away'] ?? true,
+                'delivery_address' => ($data['take_away'] ?? true) ? null : ($data['delivery_address'] ?? null),
+                'observations' => $data['observations'] ?? null,
+                'created_by' => $request->user()->id,
+                'updated_by' => $request->user()->id,
+            ]);
+
+            // Crea/actualiza las lineas estandar (locro + salsas automaticas)
+            // y recalcula los totales UNA vez (ver docblock del metodo).
+            $pricing->syncPortionsForOrder($order, $data['portions'], $year, $request->user()->id);
+
+            // Excepciones manuales de "Opciones avanzadas" (regalo/personalizado),
+            // siempre sobre producto 'locro': se suman aparte de la linea principal.
+            foreach ($data['advanced_items'] ?? [] as $item) {
+                $pricing->addItemToOrder(
+                    order: $order,
+                    product: 'locro',
+                    type: $item['type'],
+                    quantity: $item['quantity'],
+                    year: $year,
+                    description: $item['description'] ?? null,
+                    customUnitPrice: $item['custom_unit_price'] ?? null,
+                    createdBy: $request->user()->id,
+                );
+            }
+
+            $order->recalculateTotals();
+
+            // Fase 6A, seccion 7: al crearse un pedido real, se reutiliza o
+            // crea la asignacion anual cliente/edicion correspondiente, y si
+            // la asignacion no tenia usuario asignado, se le asigna el mismo
+            // responsable del pedido. Nunca pisa una asignacion ya de otro
+            // usuario (ver ClientAssignmentService::syncFromOrder).
+            $assignments->syncFromOrder($order);
+
+            return $order;
+        });
+
+        return redirect()->route('orders.edit', $order)->with('success', "Pedido #{$order->id} creado. Ya podes agregar mas lineas o registrar pagos.");
+    }
+
+    /**
+     * Pantalla de edicion de un pedido existente (Orders/Edit.vue): datos
+     * generales + lineas (via OrderItemController) + pagos/retiro (via
+     * OrderBulkController, reusado con un solo order_id para no duplicar logica).
+     */
+    public function edit(Request $request, Order $order): Response
+    {
+        Gate::authorize('update', $order);
+
+        $user = $request->user();
+        $order->load(['client', 'rover:id,name', 'year', 'items', 'payments.method', 'withdrawnBy:id,name']);
+
+        return Inertia::render('Orders/Edit', [
+            'order' => $order,
+            'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active', 'portion_price', 'promo_unit_price', 'amount_for_promo']),
+            'rovers' => $user->can('pedidos.asignar-rover')
+                ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'canAssignRover' => $user->can('pedidos.asignar-rover'),
+            'canRegisterPayment' => $user->can('pagos.registrar'),
+            'canWithdraw' => $user->can('pedidos.retirar'),
+            'canDelete' => $user->can('pedidos.eliminar'),
+            'canExceptionalPrice' => $user->can('pedidos.precio-excepcional'),
+            'authUserId' => $user->id,
+        ]);
+    }
+
+    /**
+     * Fase 7, seccion 8: advertencia de pedido duplicado. Devuelve los
+     * pedidos NO cancelados que ya existen para un cliente en una edicion,
+     * para que el frontend (New.vue, o el picker de Clientes/Pedidos) pueda
+     * mostrar la advertencia ANTES de crear otro. Nunca bloquea la creacion:
+     * solo informa (la decision de "crear igual" queda del lado del usuario,
+     * ver seccion 8 del prompt de la fase). Respeta el mismo scope que
+     * OrderController::index (un Rover sin 'pedidos.ver-todos' solo ve sus
+     * propios pedidos existentes, para no filtrar informacion de otros).
+     */
+    public function checkExisting(Request $request): \Illuminate\Http\JsonResponse
+    {
+        Gate::authorize('viewAny', Order::class);
+
+        $request->validate([
+            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            'year_id' => ['required', 'integer', 'exists:years,id'],
+        ]);
+
+        $user = $request->user();
+        $canViewAll = $user->can('pedidos.ver-todos');
+
+        $orders = Order::query()
+            ->where('client_id', $request->integer('client_id'))
+            ->where('year_id', $request->integer('year_id'))
+            ->where('status', '!=', 'cancelado')
+            ->when(! $canViewAll, fn ($q) => $q->where('rover_id', $user->id))
+            ->with('rover:id,name')
+            ->get(['id', 'client_id', 'year_id', 'rover_id', 'total_portions', 'balance_due', 'status']);
+
+        return response()->json(['orders' => $orders]);
+    }
+
+    /**
+     * Datos generales del pedido (cliente, anio, rover, estado, observaciones).
+     * Lineas se editan aparte via OrderItemController; pagos/retiro via
+     * OrderBulkController.
+     *
+     * FIX DE SEGURIDAD (Fase 4): antes, 'rover_id' se guardaba con solo el
+     * permiso generico 'pedidos.editar' (via OrderPolicy::update), permitiendo
+     * que un rol como 'logistica' (que tiene 'pedidos.editar' pero NO
+     * 'pedidos.asignar-rover') reasignara pedidos igual, coladoi por esta ruta
+     * generica. Ahora se re-chequea explicitamente el permiso de asignacion
+     * cuando el payload incluye rover_id.
+     */
+    public function update(UpdateOrderRequest $request, Order $order, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    {
+        $data = $request->validated();
+
+        // Fase 6A: si el payload trae rover_id y difiere del actual, se
+        // re-chequea explicitamente contra la regla de autoasignacion vs
+        // transferencia (ver OrderPolicy::assignRover). $targetRoverId puede
+        // ser null (desasignar el pedido); en ese caso solo quien puede
+        // transferir puede dejarlo sin responsable si ya tenia uno.
+        $roverChanged = array_key_exists('rover_id', $data) && $data['rover_id'] !== $order->rover_id;
+
+        if ($roverChanged) {
+            Gate::authorize('assignRover', [$order, $data['rover_id'] !== null ? (int) $data['rover_id'] : null]);
+        }
+
+        $yearChanged = isset($data['year_id']) && (int) $data['year_id'] !== $order->year_id;
+
+        // Si el pedido pasa a ser retira en mano, la direccion de entrega no
+        // aplica: se limpia explicitamente (nunca se deja una direccion vieja
+        // colgada en un pedido que ya no es delivery).
+        if (array_key_exists('take_away', $data) && $data['take_away']) {
+            $data['delivery_address'] = null;
+        }
+
+        $order->update([
+            ...$data,
+            'updated_by' => $request->user()->id,
+        ]);
+
+        if ($yearChanged) {
+            $pricing->recalculatePricedLinesForOrder($order, $order->year()->firstOrFail());
+        }
+
+        // Fase 6A/7 (correccion): mantiene sincronizado el responsable
+        // efectivo (y TODOS los demas pedidos del mismo cliente/edicion, ver
+        // ClientAssignmentService::syncResponsibleForClientYear) cada vez que
+        // se edita un pedido, sin importar si el campo que cambio fue
+        // rover_id u otro (syncFromOrder ya lo hace de forma incondicional
+        // cuando el pedido tiene rover).
+        $assignments->syncFromOrder($order->fresh());
+
+        return back()->with('success', "Pedido #{$order->id} actualizado.");
+    }
+
+    /**
+     * Fase 7 (correccion 2), seccion 4: eliminacion de pedido. Es un SOFT
+     * DELETE (Order usa SoftDeletes, ver migracion de orders): el pedido deja
+     * de listarse, pero NO se borra fisicamente ni arrastra en cascada sus
+     * `payments`/`order_items` (esas FKs tienen cascadeOnDelete a nivel de
+     * base, pero eso solo dispararia con un DELETE SQL real; un soft delete
+     * de Eloquent solo hace UPDATE de `deleted_at`, asi que pagos e items
+     * quedan intactos e inalterados). Esto ya protegia la informacion
+     * contable/historica correctamente; el bug reportado NO era de diseño de
+     * borrado sino de permisos + manejo de errores (ver mas abajo).
+     *
+     * wantsJson() se soporta explicitamente (igual que store/update) porque
+     * el frontend ahora llama a este endpoint con axios en vez de con una
+     * navegacion Inertia, para poder mostrar un mensaje de error claro si
+     * falla (antes fallaba en silencio, ver Orders/Edit.vue).
+     */
+    public function destroy(Request $request, Order $order): RedirectResponse|\Illuminate\Http\JsonResponse
+    {
+        Gate::authorize('delete', $order);
+
+        $order->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => "Pedido #{$order->id} eliminado."]);
+        }
+
+        return back()->with('success', "Pedido #{$order->id} eliminado.");
+    }
+
+    /**
+     * FASE 4.1: endpoint dedicado para el caso comun de edicion ("cambiar la
+     * cantidad de porciones"). Reemplaza tener que borrar y volver a crear
+     * lineas a mano desde OrderItemController para el caso mas frecuente.
+     * Responde JSON (se usa desde Orders/Edit.vue sin recargar la pagina).
+     */
+    public function updatePortions(UpdatePortionsRequest $request, Order $order, PricingService $pricing): \Illuminate\Http\JsonResponse
+    {
+        $pricing->syncPortionsForOrder($order, $request->validated('portions'), $order->year, $request->user()->id);
+
+        return response()->json([
+            'order' => $order->fresh(['items', 'payments']),
+        ]);
+    }
+}

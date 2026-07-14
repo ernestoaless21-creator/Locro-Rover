@@ -1,0 +1,171 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\PaymentMethod;
+use App\Models\User;
+use App\Models\Year;
+use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
+class RolesAndPermissionsSeeder extends Seeder
+{
+    /**
+     * Fase 6A: roles operativos nuevos, organizados por equipo (todos venden,
+     * ver seccion 2 del prompt de la fase). Reemplazan a los roles genericos
+     * 'rover' y 'jefe_equipo' para nuevas asignaciones, PERO esos roles viejos
+     * NO se borran ni se les quita el rol a los usuarios que ya los tienen
+     * (ver seccion 14: transicion segura). Un admin debe reasignarles
+     * manualmente uno de los roles nuevos desde /users cuando corresponda.
+     */
+    public const OPERATIONAL_ROLES = [
+        'admin',
+        'jefe_logistica',
+        'logistica',
+        'jefe_compras',
+        'compras',
+        'jefe_infraestructura',
+        'infraestructura',
+        'jefe_publicidad',
+        'publicidad',
+    ];
+
+    /**
+     * Roles legacy que ya no se ofrecen para NUEVAS asignaciones (ver
+     * UserController::index, que los excluye de la lista de roles
+     * seleccionables), pero se preservan si ya existen en la base para no
+     * romper usuarios/historial existentes.
+     */
+    public const LEGACY_ROLES = ['rover', 'jefe_equipo'];
+
+    /**
+     * Corre con: php artisan db:seed --class=RolesAndPermissionsSeeder
+     * (o queda incluido en DatabaseSeeder::run)
+     */
+    public function run(): void
+    {
+        $permissions = [
+            // Clientes y pedidos (operativo - TODOS los roles operativos, ver seccion 2 y 13)
+            'clientes.ver', 'clientes.crear', 'clientes.editar', 'clientes.eliminar',
+            'pedidos.ver', 'pedidos.crear', 'pedidos.editar', 'pedidos.eliminar',
+            'pedidos.ver-todos', // ver pedidos de todos los rovers, no solo los propios
+            'pedidos.asignar-rover', // Fase 6A: tambien es el permiso de TRANSFERIR un pedido ya asignado (ver OrderPolicy::assignRover)
+            'pedidos.retirar',
+            'pedidos.precio-excepcional',
+            'pagos.registrar',
+            // Regalos y perdidas: registros de stock independientes de pedidos.
+            'regalos.gestionar',
+            'perdidas.gestionar',
+            // Fase 6A: asignaciones anuales de clientes / call center.
+            'asignaciones.ver', // ver todas, filtrar, buscar, autoasignarse una libre, actualizar seguimiento, exportar
+            'asignaciones.transferir', // transferir una asignacion YA asignada a otro usuario
+            'asignaciones.numero-historico', // gestionar (crear/editar) el numero historico del cliente
+            'asignaciones.generar', // "Generar asignaciones desde edicion anterior"
+            'asignaciones.masivo', // asignacion manual masiva + reparto equitativo
+            // Fase 6A: produccion real (elaboradas/regaladas/perdidas/aptas/disponibles)
+            // es sensible y NO es lo mismo que 'finanzas.ver' (ver seccion 11).
+            'produccion.ver',
+            // Finanzas (critico - privado)
+            'finanzas.ver',
+            'gastos.gestionar',
+            'proveedores.gestionar',
+            // Organizacion interna
+            'equipos.gestionar-propio',
+            'equipos.gestionar-todos',
+            'tareas.gestionar-propio-equipo',
+            // Administracion
+            'usuarios.gestionar',
+            'roles.gestionar',
+            'parametros.gestionar',
+            'anios.gestionar',
+            'documentos.gestionar',
+            'auditoria.ver',
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        }
+
+        // --- Permisos comunes a TODOS los roles operativos (seccion 2 y 13:
+        // "todos venden"): ver/crear pedidos y clientes, ver todos los
+        // pedidos/clientes, pagos, retiro, y el seguimiento de asignaciones. ---
+        $commonOperational = [
+            'clientes.ver', 'clientes.crear', 'clientes.editar',
+            'pedidos.ver', 'pedidos.crear', 'pedidos.editar',
+            'pedidos.ver-todos', 'pedidos.retirar', 'pagos.registrar',
+            'asignaciones.ver',
+        ];
+
+        // --- Permisos exclusivos de admin/jefe_logistica/logistica (seccion 13). ---
+        // Fase 7 (correccion 2), seccion 4: 'pedidos.eliminar' YA estaba
+        // definido como permiso, pero no se le habia dado a NINGUN rol salvo
+        // 'admin' (via Permission::all() mas abajo). Esa era la causa real de
+        // "no puedo eliminar pedidos": el boton llamaba a un endpoint que
+        // funcionaba, pero Gate::authorize('delete', $order) fallaba con 403
+        // para cualquier usuario no-admin, silenciosamente (el frontend no
+        // mostraba el error). Se agrega aca (Logistica/Jefe de Logistica),
+        // ya que eliminar un pedido es una accion sensible del mismo nivel
+        // que asignar-rover/precio-excepcional, no una accion comun de
+        // cualquier Rover (ver informe de esta correccion para el detalle).
+        $logisticsOnly = [
+            'pedidos.asignar-rover', 'pedidos.precio-excepcional', 'pedidos.eliminar',
+            'regalos.gestionar', 'perdidas.gestionar',
+            'asignaciones.transferir', 'asignaciones.numero-historico',
+            'asignaciones.generar', 'asignaciones.masivo',
+            'produccion.ver', 'finanzas.ver',
+        ];
+
+        $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $admin->syncPermissions(Permission::all());
+
+        $jefeLogistica = Role::firstOrCreate(['name' => 'jefe_logistica', 'guard_name' => 'web']);
+        $jefeLogistica->syncPermissions([
+            ...$commonOperational,
+            ...$logisticsOnly,
+            'gastos.gestionar', 'proveedores.gestionar',
+            'parametros.gestionar', 'anios.gestionar', 'documentos.gestionar', 'auditoria.ver',
+        ]);
+
+        $logistica = Role::firstOrCreate(['name' => 'logistica', 'guard_name' => 'web']);
+        $logistica->syncPermissions([
+            ...$commonOperational,
+            ...$logisticsOnly,
+        ]);
+
+        // Compras, Infraestructura y Publicidad: mismo set operativo base
+        // ("todos venden"), sin los permisos exclusivos de Logistica. Cada
+        // equipo tiene su jefe con el mismo set que su equipo (esta fase no
+        // agrega permisos especificos de gestion de Compras/Infraestructura/
+        // Publicidad todavia, ver seccion 19: no se avanza a esos modulos).
+        foreach (['compras', 'infraestructura', 'publicidad'] as $team) {
+            $jefeRole = Role::firstOrCreate(['name' => "jefe_{$team}", 'guard_name' => 'web']);
+            $jefeRole->syncPermissions($commonOperational);
+
+            $teamRole = Role::firstOrCreate(['name' => $team, 'guard_name' => 'web']);
+            $teamRole->syncPermissions($commonOperational);
+        }
+
+        // --- Roles legacy (Fase 6A, seccion 14): se preservan tal cual si ya
+        // existen (no se les toca el set de permisos aca, para no ampliar
+        // silenciosamente el acceso de usuarios que todavia no fueron
+        // migrados por un admin a uno de los roles nuevos), y NO se crean
+        // roles legacy nuevos si no existian ya en la base. Sin acciones aca:
+        // se deja este comentario para dejar constancia de la decision. ---
+
+        // Medios de pago iniciales.
+        foreach (['Efectivo', 'Transferencia'] as $name) {
+            PaymentMethod::firstOrCreate(
+                ['slug' => str()->slug($name)],
+                ['name' => $name, 'is_active' => true]
+            );
+        }
+
+        // Anio activo por defecto (ajustar el numero real antes de usar en produccion).
+        $currentYear = (int) date('Y');
+        Year::firstOrCreate(
+            ['year' => $currentYear],
+            ['label' => "Locro {$currentYear}", 'is_active' => true, 'event_type' => 'locro']
+        );
+    }
+}

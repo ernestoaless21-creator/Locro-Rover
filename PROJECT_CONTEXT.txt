@@ -1,0 +1,480 @@
+# PROJECT_CONTEXT.md — Locro App
+
+## 1. Propósito del proyecto
+
+Locro App es una aplicación web desarrollada con Laravel, Vue e Inertia para gestionar la organización y venta anual de locro de una comunidad Scout.
+
+La aplicación debe permitir gestionar distintas ediciones anuales del evento, conservando el historial de años anteriores.
+
+Este documento contiene decisiones funcionales permanentes o importantes del proyecto. El código real del ZIP más reciente adjunto en cada chat es siempre la fuente de verdad técnica sobre la implementación actual.
+
+Si existe una contradicción entre este documento y el código real más reciente, se debe señalar explícitamente antes de modificar el proyecto y no asumir silenciosamente cuál es correcto.
+
+
+## 2. Regla fundamental sobre el código
+
+Antes de implementar cualquier cambio:
+
+- Inspeccionar el ZIP o código más reciente adjunto.
+- Tomarlo como única fuente de verdad técnica del estado actual del proyecto.
+- No depender de conversaciones anteriores.
+- No asumir que una funcionalidad existe sin verificarla en el código.
+- Reutilizar la arquitectura, modelos, servicios, controladores, Policies, permisos, componentes y convenciones existentes.
+- No duplicar lógica de negocio.
+- No hacer refactors generales ni modificar código no relacionado salvo que sea estrictamente necesario.
+- No afirmar que se ejecutaron comandos, migraciones, builds o pruebas si realmente no se pudieron ejecutar.
+
+
+## 3. Stack tecnológico
+
+La aplicación utiliza actualmente:
+
+- Laravel 12.
+- PHP 8.4.
+- Vue.
+- Inertia.
+- Jetstream.
+- Spatie Laravel Permission.
+- Vite.
+
+El código real más reciente debe verificarse siempre antes de asumir versiones, dependencias o configuración.
+
+
+## 4. Ediciones por año
+
+La aplicación funciona mediante ediciones anuales.
+
+Ejemplos:
+
+- Locro 2026.
+- Locro 2027.
+
+Cada edición puede tener sus propios parámetros, incluyendo actualmente o según la evolución del proyecto:
+
+- etiqueta;
+- precio normal por porción;
+- cantidad de porciones elaboradas;
+- fecha del evento;
+- promoción por cantidad;
+- precio promocional;
+- cantidad mínima para activar la promoción;
+- notas.
+
+Los parámetros pertenecen al año correspondiente y no deben afectar incorrectamente otras ediciones.
+
+
+## 5. Regla de precios y promociones
+
+La promoción funciona mediante un umbral de cantidad.
+
+Ejemplo:
+
+- Precio normal: $18.000 por porción.
+- Cantidad mínima para promoción: 3 porciones.
+- Precio promocional: $15.000 por porción.
+
+Resultado esperado:
+
+- 1 porción = $18.000.
+- 2 porciones = $36.000.
+- 3 porciones = $45.000.
+- 4 porciones = $60.000.
+- 5 porciones = $75.000.
+
+Al alcanzar o superar el umbral configurado, el precio promocional por unidad se aplica a todas las porciones del pedido.
+
+La promoción se activa automáticamente según la cantidad. El usuario no debe elegir manualmente entre "normal" y "promoción".
+
+La promoción debe ser configurable desde Parámetros y específica para cada edición.
+
+
+## 6. Flujo simplificado de pedidos
+
+El flujo normal para crear un pedido debe ser ágil.
+
+El usuario selecciona:
+
+1. Cliente.
+2. Cantidad de porciones de locro.
+3. Edición/año cuando corresponda.
+4. Rover responsable cuando corresponda.
+5. Retiro en mano cuando corresponda.
+6. Opciones avanzadas solamente si son necesarias.
+
+El precio y la cantidad de salsas deben calcularse automáticamente.
+
+No se debe obligar al usuario a crear manualmente líneas de productos para un pedido normal.
+
+El locro es el producto principal y normal del sistema. No se deben mostrar productos irrelevantes como pastelitos en el flujo normal de pedidos.
+
+
+## 7. Clientes
+
+Los clientes normales pueden contener datos como:
+
+- nombre;
+- apellido;
+- teléfono;
+- dirección;
+- observaciones;
+- otros campos existentes en el modelo real.
+
+Los pedidos normales se vinculan con clientes.
+
+No se deben crear clientes ficticios para representar regalos, donaciones o pérdidas.
+
+
+## 8. Medios de pago
+
+Los únicos medios de pago normales definidos para la aplicación son:
+
+- Efectivo.
+- Transferencia.
+
+No se debe agregar Mercado Pago, Otro u otros medios de pago salvo petición explícita futura.
+
+Un pedido puede tener pagos múltiples según la arquitectura existente.
+
+Los pagos existentes no deben modificarse, borrarse ni recalcularse accidentalmente al cambiar precios, parámetros, regalos, pérdidas u otras funcionalidades no relacionadas.
+
+
+## 9. Recálculo de pedidos al cambiar parámetros
+
+Cuando se modifican parámetros de precio de una edición, el usuario debe poder decidir si quiere recalcular los pedidos existentes.
+
+El comportamiento implementado contempla tres posibilidades:
+
+- Guardar y recalcular pedidos.
+- Guardar sin recalcular pedidos.
+- Cancelar.
+
+Los pagos existentes nunca deben alterarse por este recálculo.
+
+Si cambia el importe total de un pedido, el saldo pendiente debe calcularse usando los pagos reales existentes.
+
+Los pedidos cancelados deben mantenerse excluidos del recálculo salvo que una futura decisión explícita indique lo contrario.
+
+
+## 10. Salsas
+
+Las salsas se calculan automáticamente según la cantidad de porciones.
+
+La regla utilizada inicialmente para 2026 es:
+
+- 0 porciones → 0 salsas.
+- 1 porción → 1 salsa.
+- 2 porciones → 1 salsa.
+- 3 porciones → 1 salsa.
+- 4 porciones → 2 salsas.
+- 5 porciones → 2 salsas.
+- 6 porciones → 3 salsas.
+
+La intención funcional es hacer esta relación configurable por edición desde Parámetros.
+
+Debe poder soportar configuraciones como:
+
+- 1 salsa cada 2 porciones.
+- 1 salsa cada 1 porción.
+- 2 salsas cada 3 porciones.
+
+La lógica debe estar centralizada en el servicio de negocio apropiado, actualmente PricingService o su equivalente real verificado en el código.
+
+La configuración de una edición no debe afectar incorrectamente otras ediciones.
+
+
+## 11. Porciones elaboradas, vendidas y stock
+
+Las porciones elaboradas representan la producción total real del evento.
+
+La métrica `made_portions` o equivalente representa todas las porciones elaboradas, incluyendo las que finalmente:
+
+- se venden;
+- se regalan o donan;
+- se pierden.
+
+La lógica deseada es:
+
+Porciones aptas para la venta =
+Porciones elaboradas - Porciones regaladas - Porciones perdidas
+
+Porciones disponibles restantes =
+Porciones aptas para la venta - Porciones vendidas
+
+Ejemplo:
+
+- 1320 elaboradas.
+- 25 regaladas.
+- 5 perdidas.
+- 1290 aptas para la venta.
+- 1200 vendidas.
+- 90 disponibles restantes.
+
+Estas métricas deben poder visualizarse claramente en el Dashboard.
+
+
+## 12. Regalos o porciones regaladas
+
+Las porciones regaladas o donadas no son pedidos normales.
+
+"Regaladas" y "donadas" representan funcionalmente lo mismo: porciones entregadas sin venta.
+
+La interfaz debe usar preferentemente el término:
+
+- Regalos.
+- Porciones regaladas.
+
+No se debe exigir crear un cliente completo.
+
+Ejemplo:
+
+- Nombre: Carsten.
+- Cantidad: 2.
+- Observación opcional: Ayudó en cocina.
+
+Los campos deseados son:
+
+- edición/año;
+- nombre o descripción del destinatario;
+- cantidad de porciones;
+- observación opcional;
+- usuario que registró el movimiento;
+- timestamps.
+
+Los regalos:
+
+- no generan importe;
+- no generan saldo;
+- no generan pagos;
+- no cuentan como ventas;
+- no cuentan como recaudación;
+- no aparecen como pedidos normales;
+- sí descuentan stock disponible para venta.
+
+Debe ser posible consultar fácilmente a quién se regalaron porciones.
+
+
+## 13. Pérdidas
+
+Las porciones perdidas deben registrarse independientemente de pedidos y regalos.
+
+Ejemplos:
+
+- 3 porciones — Se cayó una olla.
+- 2 porciones — Porciones descartadas.
+
+Los campos deseados son:
+
+- edición/año;
+- cantidad de porciones;
+- motivo u observación opcional;
+- usuario que registró la pérdida;
+- timestamps.
+
+Las pérdidas:
+
+- no son ventas;
+- no generan importe;
+- no generan saldo;
+- no generan pagos;
+- no aparecen como pedidos;
+- sí descuentan stock disponible para venta.
+
+
+## 14. Dashboard
+
+El Dashboard debe utilizar la edición/año correspondiente y mostrar información operativa útil.
+
+Entre las métricas existentes o deseadas están:
+
+- total de pedidos;
+- porciones vendidas;
+- salsas incluidas;
+- porciones elaboradas;
+- porciones regaladas;
+- porciones perdidas;
+- porciones aptas para la venta;
+- porciones disponibles restantes;
+- pedidos pendientes;
+- pedidos confirmados;
+- pedidos cancelados;
+- estado de retiro;
+- estado de pagos.
+
+Para usuarios con permisos financieros también puede mostrar:
+
+- importe total vendido;
+- total cobrado;
+- saldo pendiente;
+- recaudación por medio de pago.
+
+Los datos financieros no deben enviarse al frontend de usuarios sin autorización cuando la arquitectura permita evitarlo en backend.
+
+
+## 15. Permisos y roles
+
+Los roles existentes incluyen actualmente:
+
+- admin;
+- jefe_logistica;
+- logistica;
+- jefe_equipo;
+- rover.
+
+Entre los permisos existentes se encuentran, según el estado actual conocido:
+
+- clientes.ver;
+- clientes.crear;
+- clientes.editar;
+- clientes.eliminar;
+- pedidos.ver;
+- pedidos.crear;
+- pedidos.editar;
+- pedidos.eliminar;
+- pedidos.ver-todos;
+- pedidos.asignar-rover;
+- pedidos.retirar;
+- pagos.registrar;
+- finanzas.ver;
+- gastos.gestionar;
+- proveedores.gestionar;
+- equipos.gestionar-propio;
+- equipos.gestionar-todos;
+- tareas.gestionar-propio-equipo;
+- usuarios.gestionar;
+- roles.gestionar;
+- parametros.gestionar;
+- anios.gestionar;
+- documentos.gestionar;
+- auditoria.ver.
+
+Antes de usar estos permisos, verificar siempre el código y seeder reales más recientes.
+
+Los Rovers comunes no deben acceder a información financiera global, parámetros administrativos ni información de otros Rovers cuando no tengan los permisos correspondientes.
+
+
+## 16. Scope de pedidos por Rover
+
+Un Rover común debe ver únicamente los pedidos que le corresponden según la Policy y permisos existentes.
+
+Los usuarios con `pedidos.ver-todos` pueden ver pedidos de otros Rovers.
+
+El control de acceso debe realizarse en backend. No alcanza con ocultar elementos de la interfaz.
+
+
+## 17. Retiro de pedidos
+
+Los pedidos pueden tener estados de retiro.
+
+La arquitectura actual contempla estados como:
+
+- no retirado;
+- parcial;
+- retirado.
+
+El retiro debe mantener auditoría cuando corresponda, incluyendo información como:
+
+- quién marcó el retiro;
+- cuándo;
+- observaciones si existen.
+
+No se debe permitir modificar el estado de retiro por una vía que evite la auditoría implementada.
+
+
+## 18. Dashboard y privacidad financiera
+
+Las métricas generales deben respetar el scope del usuario.
+
+Un Rover común no debe recibir información financiera global ni datos de otros Rovers si no tiene permisos.
+
+Los usuarios con `finanzas.ver` pueden acceder a información financiera según las Policies y arquitectura existentes.
+
+Los datos financieros sensibles deben excluirse del payload del backend cuando el usuario no está autorizado, en lugar de limitarse únicamente a ocultarlos visualmente con Vue.
+
+
+## 19. Historial e integridad de datos
+
+El sistema debe conservar correctamente los datos históricos por edición.
+
+Cambiar parámetros actuales no debe modificar silenciosamente datos históricos sin confirmación explícita.
+
+Los pagos reales existentes son registros independientes y nunca deben alterarse automáticamente por:
+
+- cambio de precios;
+- recálculo de pedidos;
+- regalos;
+- pérdidas;
+- cambios en salsas.
+
+Siempre se debe priorizar la trazabilidad y evitar destruir información histórica.
+
+
+## 20. Estado aproximado conocido del proyecto
+
+El estado aproximado conocido antes de implementar Regalos, Pérdidas y configuración flexible de Salsas es cercano al 68%.
+
+Funcionalidades implementadas o avanzadas:
+
+- autenticación;
+- roles y permisos;
+- clientes;
+- pedidos;
+- flujo simplificado de alta de pedidos;
+- promociones automáticas por cantidad;
+- pagos múltiples;
+- retiro de pedidos;
+- asignación de Rover;
+- filtros;
+- parámetros por edición;
+- recálculo opcional de pedidos existentes al cambiar parámetros;
+- Dashboard operativo;
+- navegación global.
+
+Pendientes conocidos:
+
+- regalos;
+- pérdidas;
+- configuración flexible de salsas;
+- finanzas completas;
+- gastos;
+- proveedores;
+- equipos y tareas;
+- documentos PDF;
+- auditoría genérica;
+- migración de datos históricos;
+- tests automatizados.
+
+Este porcentaje es aproximado y debe actualizarse según la implementación real.
+
+
+## 21. Regla para nuevas implementaciones
+
+Al implementar una nueva funcionalidad:
+
+1. Inspeccionar primero el ZIP real más reciente.
+2. Identificar la arquitectura existente.
+3. Reutilizar servicios y lógica existentes.
+4. Evitar duplicaciones.
+5. Respetar Policies y permisos.
+6. Crear migraciones únicamente cuando sean necesarias.
+7. No alterar datos históricos innecesariamente.
+8. No modificar pagos existentes salvo petición explícita.
+9. No avanzar a funcionalidades no solicitadas.
+10. Informar claramente qué se creó y modificó.
+
+
+## 22. Formato esperado al finalizar una implementación
+
+Al terminar una fase o cambio importante, informar:
+
+1. Archivos creados.
+2. Archivos modificados.
+3. Migraciones nuevas y su propósito.
+4. Decisiones de arquitectura tomadas.
+5. Fórmulas o reglas de negocio implementadas.
+6. Permisos y Policies utilizados.
+7. Cómo se protegió la integridad histórica y financiera.
+8. Qué se ejecutó y probó realmente.
+9. Qué solo se verificó estáticamente.
+10. Riesgos reales pendientes.
+11. Estado aproximado actualizado del proyecto.
+12. Próximo paso exacto para integrar y probar, sin avanzar automáticamente a otra fase.
