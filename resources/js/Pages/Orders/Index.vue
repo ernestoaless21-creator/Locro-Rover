@@ -33,8 +33,18 @@ const props = defineProps({
   canAssignRover: { type: Boolean, default: false },
   canRegisterPayment: { type: Boolean, default: false },
   canWithdraw: { type: Boolean, default: false },
-  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0 }) },
+  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, gifts_count: 0, losses_count: 0 }) },
+  canManageGifts: { type: Boolean, default: false },
+  canManageLosses: { type: Boolean, default: false },
 })
+
+// Fase 7 (correccion 4), seccion 3: formato de moneda compacto para la franja
+// de recaudacion (visible solo si counters.collected viene en el payload, es
+// decir, solo si el backend determino que el usuario tiene 'finanzas.ver').
+const currencyFormatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
+function formatCurrency(value) {
+  return currencyFormatter.format(Number(value ?? 0))
+}
 
 const page = usePage()
 const can = (perm) => (page.props.permissions ?? []).includes(perm)
@@ -230,18 +240,38 @@ function sauces(order) {
         <YearSelector :selected-year-id="year.id" />
       </div>
 
-      <!-- Fase 7, seccion 11: contadores compactos (no son tarjetas grandes). -->
-      <div class="flex flex-wrap gap-2 mb-4 text-xs">
-        <span class="bg-gray-800 text-gray-200 rounded-md px-3 py-1.5">
-          Porciones pedidas: <strong>{{ counters.portions_total }}</strong>
-        </span>
-        <span class="bg-gray-800 text-gray-200 rounded-md px-3 py-1.5">
-          Salsas a preparar: <strong>{{ counters.sauces_total }}</strong>
-        </span>
-        <span class="bg-gray-800 text-gray-200 rounded-md px-3 py-1.5">
-          Mis porciones vendidas: <strong>{{ counters.my_portions }}</strong>
-        </span>
+      <!-- Fase 7 (correccion 4), secciones 2, 3 y 5: franja compacta de
+           indicadores. Una sola linea en escritorio, wrap en movil; nada de
+           tarjetas grandes de Dashboard. -->
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2 text-sm text-gray-700">
+        <span>🍲 {{ counters.portions_total }} porciones</span>
+        <span class="text-gray-500">·</span>
+        <span>🌶️ {{ counters.sauces_total }} salsas</span>
+        <span class="text-gray-500">·</span>
+        <span>👤 {{ counters.my_portions }} mías</span>
+        <span class="text-gray-500">·</span>
+        <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver regalos">
+          🎁 {{ counters.gifts_count }}
+        </Link>
+        <span v-else title="Regalos registrados">🎁 {{ counters.gifts_count }}</span>
+        <span class="text-gray-500">·</span>
+        <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver pérdidas">
+          ⚠️ {{ counters.losses_count }}
+        </Link>
+        <span v-else title="Pérdidas registradas">⚠️ {{ counters.losses_count }}</span>
       </div>
+
+      <!-- Fase 7 (correccion 4), seccion 3: recaudacion compacta, SOLO si el
+           backend mando counters.collected (es decir, solo con 'finanzas.ver';
+           un usuario sin ese permiso ni siquiera recibe este dato). -->
+      <div v-if="counters.collected" class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-sm text-gray-700">
+        <span>💰 Recaudado: <strong class="text-gray-900">{{ formatCurrency(counters.collected.total) }}</strong></span>
+        <span class="text-gray-500">·</span>
+        <span>💵 {{ formatCurrency(counters.collected.efectivo) }} efectivo</span>
+        <span class="text-gray-500">·</span>
+        <span>🏦 {{ formatCurrency(counters.collected.banco) }} transferencia</span>
+      </div>
+      <div v-else class="mb-2"></div>
 
       <div class="flex flex-wrap gap-2 mb-4 items-center">
         <div class="relative">
@@ -303,6 +333,21 @@ function sauces(order) {
           <option value="pendiente">Pendiente</option>
           <option value="parcial">Parcial</option>
           <option value="pagado">Pagado</option>
+        </select>
+
+        <!-- Fase 7 (correccion 4), seccion 4: filtro Delivery/Retiro para
+             organizar los recorridos del dia. take_away=true es "retira en
+             mano" y take_away=false es delivery (se respeta esa semantica
+             real, ver OrderController::index). reloadWith ya preserva el
+             resto de los filtros (año, rover, retiro, pago, busqueda). -->
+        <select
+          class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
+          :value="filters.delivery_type ?? ''"
+          @change="reloadWith({ delivery_type: $event.target.value || undefined })"
+        >
+          <option value="">Entrega: todos</option>
+          <option value="delivery">Delivery</option>
+          <option value="retiro">Retiro</option>
         </select>
       </div>
 
@@ -368,8 +413,17 @@ function sauces(order) {
                 <span class="px-2 py-0.5 rounded-full text-xs" :class="order.take_away ? 'bg-gray-700' : 'bg-blue-700'">
                   {{ order.take_away ? 'Retiro en mano' : 'Delivery' }}
                 </span>
-                <div v-if="!order.take_away && order.delivery_address" class="text-xs text-gray-400 mt-0.5">
-                  {{ order.delivery_address }}
+                <!-- Fase 7 (correccion 4), seccion 4: para pedidos de
+                     Delivery, la direccion queda SIEMPRE visible (no solo
+                     con el filtro aplicado, para no esconder informacion
+                     util en la vista "todos" tambien). Se reutiliza
+                     order.delivery_address tal cual (instantanea propia del
+                     pedido, ver migracion 2026_07_13_000004): no se inventa
+                     un fallback a la direccion del cliente, que a proposito
+                     es un dato distinto. Si no hay direccion utilizable, se
+                     marca claramente en vez de dejarlo en blanco. -->
+                <div v-if="!order.take_away" class="text-xs mt-0.5" :class="order.delivery_address ? 'text-gray-400' : 'text-amber-400 font-semibold'">
+                  {{ order.delivery_address || '⚠ Sin dirección' }}
                 </div>
               </td>
               <td class="p-2">{{ money(order.total_amount) }}</td>

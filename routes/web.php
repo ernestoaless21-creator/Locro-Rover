@@ -19,6 +19,17 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
+    // Fase 7 (correccion 4), seccion 1: Pedidos pasa a ser el centro
+    // operativo de la app. Un usuario YA autenticado que entra a "/" va
+    // directo a /orders (que a su vez aplica su propio middleware de
+    // auth/rol normalmente). Un visitante NO autenticado sigue viendo la
+    // pagina de bienvenida de siempre (con login/registro): no tiene
+    // sentido mandarlo a /orders solo para que rebote al login, y el
+    // prompt pide explicitamente "cuando corresponda", no incondicional.
+    if (auth()->check()) {
+        return redirect('/orders');
+    }
+
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'canRegister' => Route::has('register'),
@@ -47,8 +58,16 @@ Route::middleware([
     EnsureUserHasRole::class,
 ])->group(function () {
 
-    // Dashboard operativo (Fase 5A): metricas de la edicion activa.
-    Route::get('/dashboard', [DashboardController::class, 'index'])
+    // Fase 7 (correccion 4), seccion 1: Pedidos reemplaza al Dashboard como
+    // pantalla principal. La ruta /dashboard se mantiene DENTRO del mismo
+    // grupo de middleware (auth/verified/rol) para no cambiar en nada el
+    // comportamiento de autenticacion/permisos existente (un usuario sin
+    // rol sigue yendo a /pending-approval igual que antes, por ejemplo),
+    // pero ahora redirige a /orders en vez de renderizar el Dashboard.
+    // DashboardController.php y Dashboard.vue NO se eliminan (se conservan
+    // tal cual por si se reutilizan a futuro, ver prompt de esta correccion);
+    // solo se dejan de USAR como pantalla principal.
+    Route::get('/dashboard', fn () => redirect('/orders'))
         ->name('dashboard');
 
     // Usuarios y roles (Fase 5C, Parte 1)

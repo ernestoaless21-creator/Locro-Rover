@@ -73,7 +73,11 @@ return [
     |
     */
 
-    'home' => '/dashboard',
+    // Fase 7 (correccion 4), seccion 1: Pedidos es ahora la pantalla
+    // principal despues de iniciar sesion (antes era /dashboard). /dashboard
+    // se conserva como ruta y redirige a /orders (ver routes/web.php), pero
+    // se apunta esto directo a /orders para no depender de ese salto extra.
+    'home' => '/orders',
 
     /*
     |--------------------------------------------------------------------------

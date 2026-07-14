@@ -38,6 +38,9 @@ class OrderController extends Controller
 
         $user = $request->user();
         $canViewAll = $user->can('pedidos.ver-todos');
+        // Fase 7 (correccion 4), seccion 3: mismo gate que ya usa
+        // DashboardController para la recaudacion global.
+        $canViewFinancials = Gate::allows('viewGlobalFinancials', Order::class);
 
         $orders = Order::query()
             ->with(['client:id,first_name,last_name,phone', 'rover:id,name', 'withdrawnBy:id,name', 'items', 'payments'])
@@ -57,6 +60,14 @@ class OrderController extends Controller
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = trim($request->get('search'));
                 $q->whereHas('client', fn ($cq) => $cq->searchTerm($term));
+            })
+            // Fase 7 (correccion 4), seccion 4: filtro Delivery/Retiro para
+            // organizar los recorridos del dia del Locro. IMPORTANTE: se
+            // reutiliza take_away tal cual ya existe (ver migracion
+            // 2026_01_01_000009 y 2026_07_13_000004): true = "retira en
+            // mano", false = delivery. No se invierte esa semantica.
+            ->when($request->filled('delivery_type') && in_array($request->get('delivery_type'), ['delivery', 'retiro'], true), function ($q) use ($request) {
+                $q->where('take_away', $request->get('delivery_type') === 'retiro');
             })
             ->orderByDesc('created_at')
             ->paginate(50)
@@ -91,7 +102,7 @@ class OrderController extends Controller
             'rovers' => $canViewAll
                 ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search'),
+            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type'),
             'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
@@ -101,19 +112,41 @@ class OrderController extends Controller
             // sin importar los filtros de la tabla ni el estado de pago (ver
             // seccion 11 del prompt: "esten pagos o no"). Misma base/criterio
             // que usa el Dashboard, para no tener dos formulas distintas.
-            'counters' => $this->compactCounters($year, $user, $canViewAll),
-            // Nota: NO se manda ningun total agregado/financiero global aca todavia
-            // (eso es Fase 5). Cuando exista, se debe gatear con 'finanzas.ver' igual
-            // que se hizo con 'rovers' mas arriba, nunca mandarlo y ocultarlo solo en UI.
+            'counters' => $this->compactCounters($year, $user, $canViewAll, $canViewFinancials),
+            // Fase 7 (correccion 4), seccion 2: los badges de Regalos/Perdidas
+            // solo son CLICKEABLES si el usuario tiene el permiso real de
+            // gestionarlos (mismo permiso que ya gatea esos botones en el
+            // Dashboard); si no, se muestran igual pero sin link, para no
+            // llevar a un usuario sin acceso a un 403.
+            'canManageGifts' => $user->can('regalos.gestionar'),
+            'canManageLosses' => $user->can('perdidas.gestionar'),
         ]);
     }
 
     /**
-     * Fase 7, seccion 11. Reutiliza la misma nocion de "pedidos validos" que
-     * el Dashboard (no cancelados) y la misma fuente de verdad de atribucion
-     * personal (Order::rover_id, ver decision de arquitectura de la seccion 6).
+     * Fase 7, seccion 11 (correccion 4, secciones 2 y 3). Reutiliza la misma
+     * nocion de "pedidos validos" que el Dashboard (no cancelados) y la misma
+     * fuente de verdad de atribucion personal (Order::rover_id, ver decision
+     * de arquitectura de la seccion 6).
+     *
+     * "Numero de regalos/perdidas" (seccion 2 del prompt de esta correccion):
+     * se interpreta como CANTIDAD DE REGISTROS cargados (cuantos regalos/
+     * perdidas se registraron), no la suma de porciones — esa suma
+     * (`gifted_portions`/`lost_portions`) ya es una metrica sensible y
+     * distinta que el Dashboard gatea con 'produccion.ver' (revela stock).
+     * Un simple conteo de registros no revela produccion/stock, por eso NO
+     * se gatea con ese permiso: el prompt los agrupa junto a porciones/
+     * salsas/mis ventas, visibles para cualquier usuario operativo, a
+     * diferencia de la recaudacion (seccion 3), que si esta explicitamente
+     * restringida a Logistica/Admin.
+     *
+     * La recaudacion reutiliza EXACTAMENTE la misma consulta ya validada de
+     * DashboardController::index (Payment agrupado por payment_method_id
+     * sobre los pedidos NO cancelados de la edicion), separando por el
+     * `slug` real de PaymentMethod ('efectivo'/'transferencia', ver
+     * RolesAndPermissionsSeeder) en vez de asumir nombres o ids fijos.
      */
-    protected function compactCounters(Year $year, User $user, bool $canViewAll): array
+    protected function compactCounters(Year $year, User $user, bool $canViewAll, bool $canViewFinancials): array
     {
         $activeBase = Order::query()
             ->where('year_id', $year->id)
@@ -127,11 +160,51 @@ class OrderController extends Controller
             ->whereIn('order_id', (clone $activeBase)->select('id'))
             ->sum('quantity');
 
-        return [
+        $giftsCount = (int) \App\Models\Gift::query()->where('year_id', $year->id)->count();
+        $lossesCount = (int) \App\Models\Loss::query()->where('year_id', $year->id)->count();
+
+        $counters = [
             'portions_total' => $portionsTotal,
             'sauces_total' => $saucesTotal,
             'my_portions' => $personalPortions,
+            'gifts_count' => $giftsCount,
+            'losses_count' => $lossesCount,
         ];
+
+        if ($canViewFinancials) {
+            // Misma consulta que DashboardController::index (financials.by_method):
+            // suma de Payment.amount agrupada por medio de pago, sobre los
+            // pedidos NO cancelados de esta edicion. Incluye pagos parciales/
+            // anticipos porque se basa en los PAGOS reales, no en el total
+            // teorico del pedido.
+            $collectedByMethod = \App\Models\Payment::query()
+                ->select('payment_method_id', DB::raw('sum(amount) as total'))
+                ->whereIn('order_id', (clone $activeBase)->select('id'))
+                ->groupBy('payment_method_id')
+                ->get()
+                ->keyBy('payment_method_id');
+
+            $methods = \App\Models\PaymentMethod::query()->get(['id', 'name', 'slug']);
+
+            $bySlug = $methods->mapWithKeys(fn ($m) => [
+                $m->slug => (float) ($collectedByMethod[$m->id]->total ?? 0),
+            ]);
+
+            $counters['collected'] = [
+                'total' => (float) $bySlug->sum(),
+                'efectivo' => (float) ($bySlug['efectivo'] ?? 0),
+                // "Banco" en la UI = todo lo que no sea efectivo (hoy solo
+                // 'transferencia' existe como segundo medio, ver seccion 8 del
+                // PROJECT_CONTEXT.md: "Los unicos medios de pago normales son
+                // Efectivo y Transferencia"). Se suma cualquier medio no-efectivo
+                // en vez de asumir que el slug se llama literalmente
+                // 'transferencia', por si en el futuro se agrega otro medio
+                // bancario sin tocar este calculo.
+                'banco' => (float) $bySlug->reject(fn ($amount, $slug) => $slug === 'efectivo')->sum(),
+            ];
+        }
+
+        return $counters;
     }
 
     /**
