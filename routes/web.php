@@ -11,6 +11,9 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\PendingApprovalController;
 use App\Http\Controllers\PricingController;
+use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingDecisionController;
+use App\Http\Controllers\MeetingDocumentController;
 use App\Http\Controllers\TeamDocumentController;
 use App\Http\Controllers\TeamTaskController;
 use App\Http\Controllers\TeamTaskImportController;
@@ -266,6 +269,20 @@ Route::middleware([
 
     Route::post('/years/{year}/activate', [YearController::class, 'activate'])
         ->name('years.activate');
+
+    // Fase 12: actas y reuniones.
+    Route::get('/meetings', [MeetingController::class, 'index'])->name('meetings.index');
+    Route::get('/meetings/create', [MeetingController::class, 'create'])->name('meetings.create');
+    Route::post('/meetings', [MeetingController::class, 'store'])->name('meetings.store');
+    Route::get('/meetings/{meeting}', [MeetingController::class, 'show'])->name('meetings.show');
+    Route::get('/meetings/{meeting}/edit', [MeetingController::class, 'edit'])->name('meetings.edit');
+    Route::put('/meetings/{meeting}', [MeetingController::class, 'update'])->name('meetings.update');
+    Route::delete('/meetings/{meeting}', [MeetingController::class, 'destroy'])->name('meetings.destroy');
+    Route::post('/meetings/{meeting}/decisions', [MeetingDecisionController::class, 'store'])->name('meetings.decisions.store');
+    Route::put('/meetings/{meeting}/decisions/{decision}', [MeetingDecisionController::class, 'update'])->name('meetings.decisions.update');
+    Route::delete('/meetings/{meeting}/decisions/{decision}', [MeetingDecisionController::class, 'destroy'])->name('meetings.decisions.destroy');
+    Route::post('/meetings/{meeting}/documents/attach', [MeetingDocumentController::class, 'attach'])->name('meetings.documents.attach');
+    Route::delete('/meetings/{meeting}/documents/{document}/detach', [MeetingDocumentController::class, 'detach'])->name('meetings.documents.detach');
 
     // Fase 10: importación de tareas entre ediciones.
     Route::get('/teams/import', [TeamTaskImportController::class, 'create'])->name('teams.import');

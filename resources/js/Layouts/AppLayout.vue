@@ -89,6 +89,15 @@ const logout = () => {
                                     Usuarios
                                 </NavLink>
 
+                                <!-- Fase 12: Actas para usuarios con permiso actas.ver -->
+                                <NavLink
+                                    v-if="$page.props.permissions?.includes('actas.ver')"
+                                    :href="route('meetings.index')"
+                                    :active="route().current('meetings.*')"
+                                >
+                                    Actas
+                                </NavLink>
+
                                 <!-- Fase 9: "Mi equipo" para miembros de equipo (no admin) -->
                                 <NavLink
                                     v-if="$page.props.userTeam && !$page.props.permissions?.includes('equipos.gestionar-todos')"
@@ -300,6 +309,15 @@ const logout = () => {
                             :active="route().current('users.*')"
                         >
                             Usuarios
+                        </ResponsiveNavLink>
+
+                        <!-- Fase 12: Actas para usuarios con permiso actas.ver -->
+                        <ResponsiveNavLink
+                            v-if="$page.props.permissions?.includes('actas.ver')"
+                            :href="route('meetings.index')"
+                            :active="route().current('meetings.*')"
+                        >
+                            Actas
                         </ResponsiveNavLink>
 
                         <!-- Fase 9: "Mi equipo" para miembros (no admin) -->
