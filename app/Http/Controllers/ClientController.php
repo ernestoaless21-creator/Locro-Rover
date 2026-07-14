@@ -47,6 +47,8 @@ class ClientController extends Controller
             ? Year::findOrFail($request->get('year_id'))
             : Year::where('is_active', true)->firstOrFail();
 
+        $user = $request->user();
+
         $sort = in_array($request->get('sort'), ['first_name', 'last_name', 'phone', 'historical_number', 'created_at'])
             ? $request->get('sort')
             : 'last_name';
@@ -54,7 +56,21 @@ class ClientController extends Controller
 
         $clients = Client::query()
             ->when($request->filled('search'), fn ($query) => $query->searchTerm($request->get('search')))
+            // Fase 8 (correccion): "Mis clientes asignados" — clientes que
+            // tienen assigned_user_id = auth user en client_year_assignments
+            // para la edicion seleccionada.
+            ->when($request->boolean('my_assigned_clients'), function ($query) use ($user, $year) {
+                $query->whereIn('id', ClientAssignment::query()
+                    ->where('year_id', $year->id)
+                    ->where('assigned_user_id', $user->id)
+                    ->select('client_id')
+                );
+            })
             ->orderBy($sort, $direction)
+            // Fase 8 (correccion): orden alfabetico secundario por first_name
+            // cuando se ordena por last_name (el caso por defecto), para que
+            // personas con el mismo apellido queden en orden predecible.
+            ->when($sort === 'last_name', fn ($q) => $q->orderBy('first_name', $direction))
             ->paginate(50)
             ->withQueryString();
 
@@ -86,15 +102,13 @@ class ClientController extends Controller
             return $client;
         });
 
-        $user = $request->user();
-
         return Inertia::render('Clients/Index', [
             'clients' => $clients,
             'year' => $year,
             'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active']),
             'statuses' => ClientAssignment::STATUSES,
             'users' => User::query()->active()->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only('search', 'sort', 'direction'),
+            'filters' => $request->only('search', 'sort', 'direction', 'my_assigned_clients'),
             // Permisos administrativos de asignacion (seccion 2): solo
             // Logistica/Jefe de Logistica/Admin (ver RolesAndPermissionsSeeder).
             'canTransfer' => $user->can('asignaciones.transferir'),

@@ -80,10 +80,27 @@ class OrderController extends Controller
                     ->select('client_id')
                 );
             })
-            // Fase 8: "Mis pedidos cargados" — pedidos registrados originalmente
-            // por este usuario (created_by), independientemente de quien sea
-            // el Rover responsable actual (rover_id puede ser otro).
-            ->when($request->boolean('created_by_me'), fn ($q) => $q->where('created_by', $user->id))
+            // Fase 8 (correccion): "Mis ventas" — pedidos con rover_id = usuario
+            // autenticado. Misma semantica que roverRanking y my_portions:
+            // la venta se atribuye al responsable actual (rover_id), no a quien
+            // registro el pedido (created_by). Reemplaza el anterior filtro
+            // "Mis pedidos cargados" (created_by).
+            ->when($request->boolean('my_sales'), fn ($q) => $q->where('rover_id', $user->id))
+            // Fase 8 (correccion): indicadores de retiro clickeables. "Por retirar"
+            // cubre pedidos no retirados o con retiro parcial; "Retiradas" son
+            // los completamente retirados. La UI los hace mutuamente excluyentes;
+            // el backend acepta cada uno de forma independiente.
+            ->when($request->boolean('pending_withdrawal'), fn ($q) => $q->whereIn('withdrawal_status', ['no_retirado', 'parcial']))
+            ->when($request->boolean('withdrawn'), fn ($q) => $q->where('withdrawal_status', 'retirado'))
+            // Fase 8 (correccion): filtros por medio de pago. Cuando ambos estan
+            // activos simultaneamente, se aplican como AND (pedidos con pagos en
+            // AMBOS medios — ej. anticipo efectivo + saldo transferencia).
+            ->when($request->boolean('pay_efectivo'), function ($q) {
+                $q->whereHas('payments', fn ($pq) => $pq->whereHas('method', fn ($mq) => $mq->where('slug', 'efectivo')));
+            })
+            ->when($request->boolean('pay_transferencia'), function ($q) {
+                $q->whereHas('payments', fn ($pq) => $pq->whereHas('method', fn ($mq) => $mq->where('slug', 'transferencia')));
+            })
             ->orderByDesc('created_at')
             ->paginate(50)
             ->withQueryString();
@@ -117,7 +134,7 @@ class OrderController extends Controller
             'rovers' => $canViewAll
                 ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type', 'my_assigned_clients', 'created_by_me'),
+            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type', 'my_assigned_clients', 'my_sales', 'pending_withdrawal', 'withdrawn', 'pay_efectivo', 'pay_transferencia'),
             'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
@@ -183,12 +200,20 @@ class OrderController extends Controller
         $giftsCount = (int) \App\Models\Gift::query()->where('year_id', $year->id)->count();
         $lossesCount = (int) \App\Models\Loss::query()->where('year_id', $year->id)->count();
 
+        // Fase 8 (correccion): contadores de retiro para los indicadores
+        // clickeables "Por retirar" y "Retiradas". Misma base que el resto:
+        // pedidos no cancelados, respetando el scope de canViewAll.
+        $portionsPendingWithdrawal = (int) (clone $activeBase)->whereIn('withdrawal_status', ['no_retirado', 'parcial'])->sum('total_portions');
+        $portionsWithdrawn = (int) (clone $activeBase)->where('withdrawal_status', 'retirado')->sum('total_portions');
+
         $counters = [
             'portions_total' => $portionsTotal,
             'sauces_total' => $saucesTotal,
             'my_portions' => $personalPortions,
             'gifts_count' => $giftsCount,
             'losses_count' => $lossesCount,
+            'portions_pending_withdrawal' => $portionsPendingWithdrawal,
+            'portions_withdrawn' => $portionsWithdrawn,
         ];
 
         if ($canViewFinancials) {

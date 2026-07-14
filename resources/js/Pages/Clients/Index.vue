@@ -362,6 +362,18 @@ function exportUrl() {
         <button v-if="canGenerate" type="button" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded-md text-sm" @click="openGenerateModal">
           Generar desde edición anterior
         </button>
+        <!-- Fase 8 (correccion): filtro rapido "Mis clientes asignados" —
+             clientes con assigned_user_id = auth user para la edicion actual. -->
+        <button
+          type="button"
+          class="px-3 py-2 rounded-md text-sm border transition-colors"
+          :class="filters.my_assigned_clients
+            ? 'bg-indigo-600 text-white border-indigo-500'
+            : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+          @click="reloadWith({ my_assigned_clients: filters.my_assigned_clients ? undefined : '1' })"
+        >
+          Mis clientes asignados
+        </button>
         <button
           v-if="selected.size > 0 && can('clientes.eliminar')"
           type="button"

@@ -15,8 +15,8 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Fase 8: gráfico de porciones por Rover, filtro "Mis clientes asignados"
- * y filtro "Mis pedidos cargados".
+ * Fase 8 / Fase 8 (correccion): gráfico de porciones por Rover, filtros
+ * personales (my_sales, my_assigned_clients) e indicadores de retiro y pago.
  *
  * Patron de tests: mismo que OrderCompactIndicatorsTest (RefreshDatabase +
  * RolesAndPermissionsSeeder + Year::where('year', 2026)->firstOrFail()).
@@ -382,88 +382,6 @@ class OrderPhase8Test extends TestCase
         );
     }
 
-    // ---------- FILTRO: MIS PEDIDOS CARGADOS ----------------------------------
-
-    public function test_created_by_me_filters_by_created_by(): void
-    {
-        $admin = $this->makeAdmin();
-        $roverOther = User::factory()->create(['is_active' => true]);
-
-        $myOrder = $this->makeOrder($admin->id, creatorId: $admin->id, portions: 2);
-        $otherOrder = $this->makeOrder($admin->id, creatorId: $roverOther->id, portions: 3);
-
-        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&created_by_me=1");
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $myOrder->id)
-        );
-    }
-
-    public function test_created_by_me_does_not_confuse_created_by_with_rover_id(): void
-    {
-        $admin = $this->makeAdmin();
-        $rover = User::factory()->create(['is_active' => true]);
-
-        // Admin carga el pedido (created_by=admin) pero lo asigna al rover (rover_id=rover).
-        $orderCreatedByAdmin = $this->makeOrder($rover->id, creatorId: $admin->id, portions: 5);
-        // Rover carga el pedido y también es responsable.
-        $orderCreatedByRover = $this->makeOrder($rover->id, creatorId: $rover->id, portions: 3);
-
-        // Filtrando "mis pedidos cargados" como admin: solo el que creó admin.
-        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&created_by_me=1");
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderCreatedByAdmin->id)
-        );
-    }
-
-    public function test_created_by_me_combines_with_delivery_type_filter(): void
-    {
-        $admin = $this->makeAdmin();
-        $other = User::factory()->create(['is_active' => true]);
-
-        // Admin crea dos pedidos: uno delivery, uno retiro.
-        $client1 = Client::create(['first_name' => 'A', 'last_name' => 'One']);
-        $orderDelivery = Order::create([
-            'client_id' => $client1->id,
-            'year_id' => $this->year->id,
-            'rover_id' => $admin->id,
-            'created_by' => $admin->id,
-            'updated_by' => $admin->id,
-            'take_away' => false,
-            'delivery_address' => 'Av. Test 123',
-        ]);
-        app(PricingService::class)->syncPortionsForOrder($orderDelivery, 2, $this->year, $admin->id);
-
-        $client2 = Client::create(['first_name' => 'B', 'last_name' => 'Two']);
-        $orderRetiro = Order::create([
-            'client_id' => $client2->id,
-            'year_id' => $this->year->id,
-            'rover_id' => $admin->id,
-            'created_by' => $admin->id,
-            'updated_by' => $admin->id,
-            'take_away' => true,
-        ]);
-        app(PricingService::class)->syncPortionsForOrder($orderRetiro, 2, $this->year, $admin->id);
-
-        // Pedido delivery cargado por otro (no debe aparecer).
-        $this->makeOrder($other->id, creatorId: $other->id, portions: 1);
-
-        $response = $this->actingAs($admin)->get(
-            "/orders?year_id={$this->year->id}&created_by_me=1&delivery_type=delivery"
-        );
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderDelivery->id)
-        );
-    }
-
     // ---------- COMBINACION Y REGRESION ---------------------------------------
 
     public function test_existing_phase7_filters_still_work(): void
@@ -511,13 +429,14 @@ class OrderPhase8Test extends TestCase
         $admin = $this->makeAdmin();
 
         $response = $this->actingAs($admin)->get(
-            "/orders?year_id={$this->year->id}&my_assigned_clients=1&created_by_me=1&delivery_type=delivery"
+            "/orders?year_id={$this->year->id}&my_assigned_clients=1&my_sales=1&pending_withdrawal=1&delivery_type=delivery"
         );
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->where('filters.my_assigned_clients', '1')
-            ->where('filters.created_by_me', '1')
+            ->where('filters.my_sales', '1')
+            ->where('filters.pending_withdrawal', '1')
             ->where('filters.delivery_type', 'delivery')
         );
     }
@@ -559,5 +478,198 @@ class OrderPhase8Test extends TestCase
             ->get("/orders?year_id={$this->year->id}")
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('roverRanking', null));
+    }
+
+    // ---------- FILTRO: MIS VENTAS (rover_id) ---------------------------------
+
+    public function test_my_sales_filters_by_rover_id(): void
+    {
+        $admin = $this->makeAdmin();
+        $rover = User::factory()->create(['is_active' => true]);
+
+        $myOrder = $this->makeOrder($admin->id, creatorId: $rover->id, portions: 3);
+        $this->makeOrder($rover->id, creatorId: $admin->id, portions: 5);
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&my_sales=1");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('orders.total', 1)
+            ->where('orders.data.0.id', $myOrder->id)
+        );
+    }
+
+    public function test_my_sales_distinguishes_rover_from_creator(): void
+    {
+        $admin = $this->makeAdmin();
+        $rover = User::factory()->create(['is_active' => true]);
+
+        // El admin carga el pedido pero el responsable (rover_id) es el rover.
+        $orderAdminCreatedRoverResponsible = $this->makeOrder($rover->id, creatorId: $admin->id, portions: 4);
+        // El admin es tanto el creador como el responsable.
+        $orderAdminBoth = $this->makeOrder($admin->id, creatorId: $admin->id, portions: 2);
+
+        // my_sales=1 como admin: solo el que tiene rover_id=admin.
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&my_sales=1");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('orders.total', 1)
+            ->where('orders.data.0.id', $orderAdminBoth->id)
+        );
+    }
+
+    // ---------- FILTROS: RETIRO (pending_withdrawal / withdrawn) --------------
+
+    public function test_pending_withdrawal_filter_includes_no_retirado_and_parcial(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $orderNoRetirado = $this->makeOrder($admin->id, $admin->id, 2);
+        Order::where('id', $orderNoRetirado->id)->update(['withdrawal_status' => 'no_retirado']);
+
+        $orderParcial = $this->makeOrder($admin->id, $admin->id, 3);
+        Order::where('id', $orderParcial->id)->update(['withdrawal_status' => 'parcial']);
+
+        $orderRetirado = $this->makeOrder($admin->id, $admin->id, 4);
+        Order::where('id', $orderRetirado->id)->update(['withdrawal_status' => 'retirado']);
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&pending_withdrawal=1");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page->where('orders.total', 2));
+    }
+
+    public function test_withdrawn_filter_shows_only_fully_withdrawn_orders(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $orderRetirado = $this->makeOrder($admin->id, $admin->id, 5);
+        Order::where('id', $orderRetirado->id)->update(['withdrawal_status' => 'retirado']);
+
+        $orderParcial = $this->makeOrder($admin->id, $admin->id, 3);
+        Order::where('id', $orderParcial->id)->update(['withdrawal_status' => 'parcial']);
+
+        $this->makeOrder($admin->id, $admin->id, 2); // no_retirado (default)
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&withdrawn=1");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('orders.total', 1)
+            ->where('orders.data.0.id', $orderRetirado->id)
+        );
+    }
+
+    // ---------- FILTROS: MEDIO DE PAGO (pay_efectivo / pay_transferencia) -----
+
+    public function test_pay_efectivo_filter_shows_orders_with_efectivo_payment(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $methodEfectivo = \App\Models\PaymentMethod::where('slug', 'efectivo')->firstOrFail();
+        $methodTransferencia = \App\Models\PaymentMethod::where('slug', 'transferencia')->firstOrFail();
+
+        $orderEfectivo = $this->makeOrder($admin->id, $admin->id, 2);
+        \App\Models\Payment::create([
+            'order_id' => $orderEfectivo->id,
+            'payment_method_id' => $methodEfectivo->id,
+            'amount' => 500,
+            'paid_at' => now(),
+            'registered_by' => $admin->id,
+        ]);
+
+        $orderTransferencia = $this->makeOrder($admin->id, $admin->id, 3);
+        \App\Models\Payment::create([
+            'order_id' => $orderTransferencia->id,
+            'payment_method_id' => $methodTransferencia->id,
+            'amount' => 750,
+            'paid_at' => now(),
+            'registered_by' => $admin->id,
+        ]);
+
+        $this->makeOrder($admin->id, $admin->id, 1); // sin pago
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&pay_efectivo=1");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('orders.total', 1)
+            ->where('orders.data.0.id', $orderEfectivo->id)
+        );
+    }
+
+    public function test_pay_efectivo_and_pay_transferencia_together_apply_and_logic(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $methodEfectivo = \App\Models\PaymentMethod::where('slug', 'efectivo')->firstOrFail();
+        $methodTransferencia = \App\Models\PaymentMethod::where('slug', 'transferencia')->firstOrFail();
+
+        // Pedido con ambos medios de pago.
+        $orderAmbos = $this->makeOrder($admin->id, $admin->id, 4);
+        \App\Models\Payment::create([
+            'order_id' => $orderAmbos->id,
+            'payment_method_id' => $methodEfectivo->id,
+            'amount' => 300,
+            'paid_at' => now(),
+            'registered_by' => $admin->id,
+        ]);
+        \App\Models\Payment::create([
+            'order_id' => $orderAmbos->id,
+            'payment_method_id' => $methodTransferencia->id,
+            'amount' => 200,
+            'paid_at' => now(),
+            'registered_by' => $admin->id,
+        ]);
+
+        // Pedido solo con efectivo.
+        $orderSoloEfectivo = $this->makeOrder($admin->id, $admin->id, 2);
+        \App\Models\Payment::create([
+            'order_id' => $orderSoloEfectivo->id,
+            'payment_method_id' => $methodEfectivo->id,
+            'amount' => 400,
+            'paid_at' => now(),
+            'registered_by' => $admin->id,
+        ]);
+
+        // Ambos filtros activos: solo el pedido con los dos medios debe aparecer.
+        $response = $this->actingAs($admin)->get(
+            "/orders?year_id={$this->year->id}&pay_efectivo=1&pay_transferencia=1"
+        );
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('orders.total', 1)
+            ->where('orders.data.0.id', $orderAmbos->id)
+        );
+    }
+
+    // ---------- CONTADORES: portions_pending_withdrawal / portions_withdrawn ---
+
+    public function test_counters_include_portions_pending_withdrawal_and_withdrawn(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $orderNoRetirado = $this->makeOrder($admin->id, $admin->id, 3);
+        Order::where('id', $orderNoRetirado->id)->update(['withdrawal_status' => 'no_retirado']);
+
+        $orderParcial = $this->makeOrder($admin->id, $admin->id, 2);
+        Order::where('id', $orderParcial->id)->update(['withdrawal_status' => 'parcial']);
+
+        $orderRetirado = $this->makeOrder($admin->id, $admin->id, 5);
+        Order::where('id', $orderRetirado->id)->update(['withdrawal_status' => 'retirado']);
+
+        // Cancelado: no debe sumarse a ninguno de los dos contadores.
+        $orderCancelado = $this->makeOrder($admin->id, $admin->id, 10, status: 'cancelado');
+        Order::where('id', $orderCancelado->id)->update(['withdrawal_status' => 'no_retirado']);
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('counters.portions_pending_withdrawal', 5)  // 3 + 2
+            ->where('counters.portions_withdrawn', 5)           // solo el retirado
+        );
     }
 }

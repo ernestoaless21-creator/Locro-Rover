@@ -33,7 +33,7 @@ const props = defineProps({
   canAssignRover: { type: Boolean, default: false },
   canRegisterPayment: { type: Boolean, default: false },
   canWithdraw: { type: Boolean, default: false },
-  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, gifts_count: 0, losses_count: 0 }) },
+  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, gifts_count: 0, losses_count: 0, portions_pending_withdrawal: 0, portions_withdrawn: 0 }) },
   canManageGifts: { type: Boolean, default: false },
   canManageLosses: { type: Boolean, default: false },
   // Fase 8: ranking de porciones por Rover. null = usuario sin permiso ver-todos.
@@ -214,6 +214,23 @@ function barWidth(portions) {
   return Math.round((portions / maxPortions.value) * 100)
 }
 
+// Fase 8 (correccion): filtros de retiro clickeables mutuamente excluyentes.
+// Se usan nombres distintos de toggleWithdrawn (que ya existe para el checkbox
+// de fila individual) para evitar colision de nombres.
+function filterByPendingWithdrawal() {
+  reloadWith({
+    pending_withdrawal: props.filters.pending_withdrawal ? undefined : '1',
+    withdrawn: undefined,
+  })
+}
+
+function filterByWithdrawn() {
+  reloadWith({
+    withdrawn: props.filters.withdrawn ? undefined : '1',
+    pending_withdrawal: undefined,
+  })
+}
+
 function money(value) {
   if (value === null || value === undefined) return '-'
   return `$${Number(value).toLocaleString('es-AR')}`
@@ -252,15 +269,36 @@ function sauces(order) {
         <YearSelector :selected-year-id="year.id" />
       </div>
 
-      <!-- Fase 7 (correccion 4), secciones 2, 3 y 5: franja compacta de
-           indicadores. Una sola linea en escritorio, wrap en movil; nada de
-           tarjetas grandes de Dashboard. -->
+      <!-- Fase 7 (correccion 4) / Fase 8 (correccion): franja compacta de
+           indicadores. Los nuevos (por retirar, retiradas, vendidas por mí)
+           son clickeables: aplican el filtro correspondiente en la tabla. -->
       <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2 text-sm text-gray-700">
-        <span>🍲 {{ counters.portions_total }} porciones</span>
+        <span>🍗 {{ counters.portions_total }} vendidas</span>
         <span class="text-gray-500">·</span>
         <span>🌶️ {{ counters.sauces_total }} salsas</span>
         <span class="text-gray-500">·</span>
-        <span>👤 {{ counters.my_portions }} mías</span>
+        <button
+          class="hover:underline transition-colors"
+          :class="filters.pending_withdrawal ? 'text-orange-500 font-semibold' : ''"
+          title="Filtrar pedidos por retirar"
+          @click="filterByPendingWithdrawal"
+        >🕐 {{ counters.portions_pending_withdrawal }} por retirar</button>
+        <span class="text-gray-500">·</span>
+        <button
+          class="hover:underline transition-colors"
+          :class="filters.withdrawn ? 'text-green-500 font-semibold' : ''"
+          title="Filtrar pedidos retirados"
+          @click="filterByWithdrawn"
+        >✅ {{ counters.portions_withdrawn }} retiradas</button>
+        <span class="text-gray-500">·</span>
+        <span title="Porciones producidas (configurado en Parámetros)">📦 {{ year.made_portions ?? 0 }} producidas</span>
+        <span class="text-gray-500">·</span>
+        <button
+          class="hover:underline transition-colors"
+          :class="filters.my_sales ? 'text-blue-500 font-semibold' : ''"
+          title="Filtrar mis ventas"
+          @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
+        >👤 {{ counters.my_portions }} vendidas por mí</button>
         <span class="text-gray-500">·</span>
         <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver regalos">
           🎁 {{ counters.gifts_count }}
@@ -268,20 +306,30 @@ function sauces(order) {
         <span v-else title="Regalos registrados">🎁 {{ counters.gifts_count }}</span>
         <span class="text-gray-500">·</span>
         <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver pérdidas">
-          ⚠️ {{ counters.losses_count }}
+          🗑️ {{ counters.losses_count }}
         </Link>
-        <span v-else title="Pérdidas registradas">⚠️ {{ counters.losses_count }}</span>
+        <span v-else title="Pérdidas registradas">🗑️ {{ counters.losses_count }}</span>
       </div>
 
-      <!-- Fase 7 (correccion 4), seccion 3: recaudacion compacta, SOLO si el
-           backend mando counters.collected (es decir, solo con 'finanzas.ver';
-           un usuario sin ese permiso ni siquiera recibe este dato). -->
+      <!-- Fase 7 (correccion 4) / Fase 8 (correccion): recaudacion compacta, SOLO
+           con 'finanzas.ver'. Efectivo y transferencia son clickeables: filtran
+           por medio de pago (AND cuando ambos activos). -->
       <div v-if="counters.collected" class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-sm text-gray-700">
         <span>💰 Recaudado: <strong class="text-gray-900">{{ formatCurrency(counters.collected.total) }}</strong></span>
         <span class="text-gray-500">·</span>
-        <span>💵 {{ formatCurrency(counters.collected.efectivo) }} efectivo</span>
+        <button
+          class="hover:underline transition-colors"
+          :class="filters.pay_efectivo ? 'text-green-600 font-semibold' : ''"
+          title="Filtrar pedidos con pago en efectivo"
+          @click="reloadWith({ pay_efectivo: filters.pay_efectivo ? undefined : '1' })"
+        >💵 {{ formatCurrency(counters.collected.efectivo) }} efectivo</button>
         <span class="text-gray-500">·</span>
-        <span>🏦 {{ formatCurrency(counters.collected.banco) }} transferencia</span>
+        <button
+          class="hover:underline transition-colors"
+          :class="filters.pay_transferencia ? 'text-blue-600 font-semibold' : ''"
+          title="Filtrar pedidos con pago en transferencia"
+          @click="reloadWith({ pay_transferencia: filters.pay_transferencia ? undefined : '1' })"
+        >🏦 {{ formatCurrency(counters.collected.banco) }} transferencia</button>
       </div>
       <div v-else class="mb-2"></div>
 
@@ -397,14 +445,17 @@ function sauces(order) {
           Mis clientes asignados
         </button>
 
+        <!-- Fase 8 (correccion): "Mis ventas" reemplaza "Mis pedidos cargados".
+             Filtra por rover_id = auth user (mismo criterio que el indicador
+             "Vendidas por mí" y roverRanking), no por created_by. -->
         <button
           class="px-3 py-2 rounded-md text-sm border transition-colors"
-          :class="filters.created_by_me
+          :class="filters.my_sales
             ? 'bg-purple-600 text-white border-purple-500'
             : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
-          @click="reloadWith({ created_by_me: filters.created_by_me ? undefined : '1' })"
+          @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
         >
-          Mis pedidos cargados
+          Mis ventas
         </button>
       </div>
 

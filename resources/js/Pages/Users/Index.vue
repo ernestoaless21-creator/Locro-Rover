@@ -8,6 +8,7 @@ import { Head, router } from '@inertiajs/vue3'
 import { ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { useToast } from '@/Composables/useToast'
+import { roleLabel } from '@/utils/roleLabels'
 
 const props = defineProps({
   users: { type: Array, required: true },
@@ -84,7 +85,7 @@ function toggleActive(user) {
                   class="px-2 py-0.5 rounded-full text-xs"
                   :class="user.is_legacy_role ? 'bg-yellow-800' : 'bg-green-700'"
                 >
-                  {{ user.role }}<span v-if="user.is_legacy_role"> (legacy)</span>
+                  {{ roleLabel(user.role) }}<span v-if="user.is_legacy_role"> (legacy)</span>
                 </span>
                 <span v-else class="px-2 py-0.5 rounded-full text-xs bg-yellow-700">
                   Sin rol — pendiente
@@ -98,8 +99,8 @@ function toggleActive(user) {
                   @change="updateRole(user, $event.target.value)"
                 >
                   <option value="" disabled>Elegir rol...</option>
-                  <option v-for="role in roles" :key="role" :value="role">{{ role }}</option>
-                  <option v-if="user.is_legacy_role" :value="user.role" disabled>{{ user.role }} (legacy, elegir uno nuevo)</option>
+                  <option v-for="role in roles" :key="role" :value="role">{{ roleLabel(role) }}</option>
+                  <option v-if="user.is_legacy_role" :value="user.role" disabled>{{ roleLabel(user.role) }} (legacy, elegir uno nuevo)</option>
                 </select>
               </td>
               <td class="p-3">
