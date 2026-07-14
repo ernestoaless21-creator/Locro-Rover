@@ -1,14 +1,15 @@
 <script setup>
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, useForm } from '@inertiajs/vue3'
 import { ref, computed, reactive } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
-  team: { type: String, required: true },
-  tasks: { type: Array, required: true },
-  year: { type: Object, required: true },
+  team:      { type: String,  required: true },
+  tasks:     { type: Array,   required: true },
+  documents: { type: Array,   required: true },
+  year:      { type: Object,  required: true },
   canManage: { type: Boolean, required: true },
   canImport: { type: Boolean, default: false },
 })
@@ -240,6 +241,92 @@ function destroyItem(task, item) {
     {
       preserveScroll: true,
       onSuccess: () => toast.success('Paso eliminado.'),
+    },
+  )
+}
+
+// ========== DOCUMENTOS ====================================================
+
+// ---------- Helpers de presentación ----------------------------------------
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
+function docIcon(mimeType) {
+  if (!mimeType) return '📎'
+  if (mimeType.includes('pdf')) return '📄'
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return '📊'
+  if (mimeType.includes('image')) return '🖼️'
+  if (mimeType.includes('word') || mimeType.includes('document')) return '📝'
+  if (mimeType.includes('video')) return '🎬'
+  return '📎'
+}
+
+// ---------- Subir documento -----------------------------------------------
+
+const showUploadForm = ref(false)
+const uploadForm = useForm({ name: '', description: '', file: null, year_id: null })
+
+function onFileSelected(e) {
+  uploadForm.file = e.target.files[0] ?? null
+  if (uploadForm.file && !uploadForm.name.trim()) {
+    uploadForm.name = uploadForm.file.name.replace(/\.[^.]+$/, '')
+  }
+}
+
+function submitUpload() {
+  uploadForm.year_id = props.year.id
+  uploadForm.post(route('teams.documents.store', props.team), {
+    preserveScroll: true,
+    forceFormData: true,
+    onSuccess: () => {
+      uploadForm.reset()
+      showUploadForm.value = false
+    },
+  })
+}
+
+// ---------- Editar documento -----------------------------------------------
+
+const editingDocId = ref(null)
+const editDocForm = reactive({ name: '', description: '' })
+
+function startEditDoc(doc) {
+  editingDocId.value = doc.id
+  editDocForm.name = doc.name
+  editDocForm.description = doc.description ?? ''
+}
+
+function cancelEditDoc() {
+  editingDocId.value = null
+}
+
+function saveEditDoc(doc) {
+  if (!editDocForm.name.trim()) return
+  router.put(
+    route('teams.documents.update', { team: props.team, doc: doc.id }),
+    { name: editDocForm.name, description: editDocForm.description || null },
+    {
+      preserveScroll: true,
+      onSuccess: () => cancelEditDoc(),
+      onError: () => toast.error('Error al actualizar el documento.'),
+    },
+  )
+}
+
+// ---------- Eliminar documento --------------------------------------------
+
+function destroyDoc(doc) {
+  // eslint-disable-next-line no-alert
+  if (!window.confirm(`¿Eliminar "${doc.name}"? Esta acción no se puede deshacer.`)) return
+  router.delete(
+    route('teams.documents.destroy', { team: props.team, doc: doc.id }),
+    {
+      preserveScroll: true,
+      onSuccess: () => toast.success('Documento eliminado.'),
     },
   )
 }
@@ -661,7 +748,178 @@ function destroyItem(task, item) {
         </div>
       </div>
 
-      <p v-else class="text-center text-gray-500 py-12">No hay tareas para esta edición.</p>
+      <p v-else class="text-center text-gray-400 py-12 text-sm">
+        No hay tareas para esta edición.
+      </p>
+
+      <!-- ══════════ SECCIÓN DOCUMENTACIÓN ══════════════════════════════════ -->
+      <div class="mt-10">
+
+        <!-- Encabezado de documentación -->
+        <div class="mb-4 flex items-center justify-between gap-4">
+          <h3 class="font-semibold text-gray-700 shrink-0">Documentación</h3>
+          <button
+            v-if="canManage"
+            type="button"
+            class="text-sm text-indigo-600 hover:text-indigo-800 font-medium shrink-0"
+            @click="showUploadForm = !showUploadForm"
+          >
+            {{ showUploadForm ? '✕ Cancelar' : '+ Subir archivo' }}
+          </button>
+        </div>
+
+        <!-- Formulario de subida -->
+        <form
+          v-if="canManage && showUploadForm"
+          class="mb-5 bg-white rounded-lg shadow-sm border border-gray-100 p-4"
+          @submit.prevent="submitUpload"
+        >
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Archivo</label>
+              <input
+                type="file"
+                class="w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                @change="onFileSelected"
+              />
+              <p v-if="uploadForm.errors.file" class="text-xs text-red-600 mt-1">{{ uploadForm.errors.file }}</p>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Nombre del documento</label>
+              <input
+                v-model="uploadForm.name"
+                type="text"
+                placeholder="Ej: Recorridos, Presupuesto..."
+                class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+              <p v-if="uploadForm.errors.name" class="text-xs text-red-600 mt-1">{{ uploadForm.errors.name }}</p>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1">Descripción <span class="text-gray-400">(opcional)</span></label>
+              <textarea
+                v-model="uploadForm.description"
+                rows="2"
+                placeholder="Contexto o información adicional..."
+                class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"
+              />
+            </div>
+            <div class="flex gap-2 pt-1">
+              <button
+                type="submit"
+                :disabled="uploadForm.processing || !uploadForm.file"
+                class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {{ uploadForm.processing ? 'Subiendo...' : 'Subir archivo' }}
+              </button>
+              <button
+                type="button"
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
+                @click="showUploadForm = false; uploadForm.reset()"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <!-- Lista de documentos -->
+        <div v-if="documents.length" class="space-y-3">
+          <div
+            v-for="doc in documents"
+            :key="doc.id"
+            class="bg-white rounded-lg shadow-sm border border-gray-100 p-4"
+          >
+            <!-- MODO LECTURA -->
+            <template v-if="editingDocId !== doc.id">
+              <div class="flex items-start gap-3">
+                <span class="text-xl shrink-0 leading-none mt-0.5">{{ docIcon(doc.mime_type) }}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-gray-800 truncate">{{ doc.name }}</p>
+                  <p class="text-xs text-gray-400 mt-0.5">
+                    {{ doc.file_name }} · {{ formatBytes(doc.file_size) }}
+                  </p>
+                  <p v-if="doc.description" class="text-sm text-gray-600 mt-2 whitespace-pre-wrap leading-relaxed">
+                    {{ doc.description }}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-2">
+                    Subido por <strong class="text-gray-600">{{ doc.uploader?.name ?? '—' }}</strong>
+                    el {{ formatDate(doc.created_at) }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <a
+                    :href="route('teams.documents.download', { team: team, doc: doc.id })"
+                    class="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Descargar
+                  </a>
+                  <template v-if="canManage">
+                    <span class="text-gray-200">|</span>
+                    <button
+                      type="button"
+                      class="text-xs text-gray-400 hover:text-indigo-600"
+                      @click="startEditDoc(doc)"
+                    >
+                      Editar
+                    </button>
+                    <span class="text-gray-200">|</span>
+                    <button
+                      type="button"
+                      class="text-xs text-gray-400 hover:text-red-600"
+                      @click="destroyDoc(doc)"
+                    >
+                      Eliminar
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- MODO EDICIÓN -->
+            <template v-else>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Nombre</label>
+                  <input
+                    v-model="editDocForm.name"
+                    type="text"
+                    class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    @keyup.escape="cancelEditDoc"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Descripción</label>
+                  <textarea
+                    v-model="editDocForm.description"
+                    rows="2"
+                    class="w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
+                    @click="saveEditDoc(doc)"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
+                    @click="cancelEditDoc"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <p v-else class="text-center text-gray-400 py-8 text-sm">
+          No hay documentos para esta edición.
+        </p>
+      </div>
 
     </div>
   </AppLayout>

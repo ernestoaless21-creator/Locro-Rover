@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\TeamDocument;
 use App\Models\TeamTask;
 use App\Models\Year;
 use Illuminate\Http\RedirectResponse;
@@ -34,9 +35,16 @@ class TeamTaskController extends Controller
             ->orderBy('id')
             ->get();
 
+        $documents = TeamDocument::with('uploader:id,name')
+            ->where('team', $team)
+            ->where('year_id', $year->id)
+            ->orderBy('created_at')
+            ->get();
+
         return Inertia::render('Teams/Show', [
             'team'      => $team,
             'tasks'     => $tasks,
+            'documents' => $documents,
             'year'      => $year->only('id', 'year', 'label'),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
             'canImport' => $request->user()->can('equipos.gestionar-todos'),

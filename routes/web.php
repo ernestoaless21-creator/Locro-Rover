@@ -11,6 +11,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\PendingApprovalController;
 use App\Http\Controllers\PricingController;
+use App\Http\Controllers\TeamDocumentController;
 use App\Http\Controllers\TeamTaskController;
 use App\Http\Controllers\TeamTaskImportController;
 use App\Http\Controllers\TeamTaskItemController;
@@ -284,5 +285,10 @@ Route::middleware([
             Route::put('/tasks/{task}/items/{item}', [TeamTaskItemController::class, 'update'])->name('teams.task-items.update');
             Route::post('/tasks/{task}/items/{item}/toggle', [TeamTaskItemController::class, 'toggle'])->name('teams.task-items.toggle');
             Route::delete('/tasks/{task}/items/{item}', [TeamTaskItemController::class, 'destroy'])->name('teams.task-items.destroy');
+            // Documentos del equipo (Fase 11)
+            Route::post('/documents', [TeamDocumentController::class, 'store'])->name('teams.documents.store');
+            Route::put('/documents/{doc}', [TeamDocumentController::class, 'update'])->name('teams.documents.update');
+            Route::get('/documents/{doc}/download', [TeamDocumentController::class, 'download'])->name('teams.documents.download');
+            Route::delete('/documents/{doc}', [TeamDocumentController::class, 'destroy'])->name('teams.documents.destroy');
         });
 });
