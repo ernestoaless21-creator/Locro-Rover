@@ -73,6 +73,7 @@ class RolesAndPermissionsSeeder extends Seeder
             // Organizacion interna
             'equipos.gestionar-propio',
             'equipos.gestionar-todos',
+            'tareas.ver',
             'tareas.gestionar-propio-equipo',
             // Administracion
             'usuarios.gestionar',
@@ -95,6 +96,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'pedidos.ver', 'pedidos.crear', 'pedidos.editar',
             'pedidos.ver-todos', 'pedidos.retirar', 'pagos.registrar',
             'asignaciones.ver',
+            'tareas.ver',
         ];
 
         // --- Permisos exclusivos de admin/jefe_logistica/logistica (seccion 13). ---
@@ -125,6 +127,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ...$logisticsOnly,
             'gastos.gestionar', 'proveedores.gestionar',
             'parametros.gestionar', 'anios.gestionar', 'documentos.gestionar', 'auditoria.ver',
+            'tareas.gestionar-propio-equipo',
         ]);
 
         $logistica = Role::firstOrCreate(['name' => 'logistica', 'guard_name' => 'web']);
@@ -140,7 +143,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Publicidad todavia, ver seccion 19: no se avanza a esos modulos).
         foreach (['compras', 'infraestructura', 'publicidad'] as $team) {
             $jefeRole = Role::firstOrCreate(['name' => "jefe_{$team}", 'guard_name' => 'web']);
-            $jefeRole->syncPermissions($commonOperational);
+            $jefeRole->syncPermissions([...$commonOperational, 'tareas.gestionar-propio-equipo']);
 
             $teamRole = Role::firstOrCreate(['name' => $team, 'guard_name' => 'web']);
             $teamRole->syncPermissions($commonOperational);

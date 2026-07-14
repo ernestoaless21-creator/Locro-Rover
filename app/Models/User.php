@@ -112,4 +112,15 @@ class User extends Authenticatable
     {
         return $this->can('finanzas.ver');
     }
+
+    public function teamSlug(): ?string
+    {
+        foreach (['logistica', 'compras', 'infraestructura', 'publicidad'] as $team) {
+            if ($this->hasRole($team) || $this->hasRole("jefe_{$team}")) {
+                return $team;
+            }
+        }
+
+        return null;
+    }
 }

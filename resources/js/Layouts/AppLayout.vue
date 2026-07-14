@@ -88,6 +88,46 @@ const logout = () => {
                                 >
                                     Usuarios
                                 </NavLink>
+
+                                <!-- Fase 9: "Mi equipo" para miembros de equipo (no admin) -->
+                                <NavLink
+                                    v-if="$page.props.userTeam && !$page.props.permissions?.includes('equipos.gestionar-todos')"
+                                    :href="route('teams.show', $page.props.userTeam)"
+                                    :active="route().current('teams.*')"
+                                >
+                                    Mi equipo
+                                </NavLink>
+
+                                <!-- Fase 9: "Equipos" dropdown para admin.
+                                     class="flex" se mergea sobre el class="relative" del root div de
+                                     Dropdown, convirtiendo al click-wrapper interno en flex item que se
+                                     estira al alto del nav. El botón usa h-full para ocupar ese alto y
+                                     alinearse igual que un NavLink (border-b-2 llega al borde inferior). -->
+                                <Dropdown
+                                    v-if="$page.props.permissions?.includes('equipos.gestionar-todos')"
+                                    align="left"
+                                    width="48"
+                                    class="flex"
+                                >
+                                    <template #trigger>
+                                        <button
+                                            type="button"
+                                            class="h-full inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium leading-5 focus:outline-none transition duration-150 ease-in-out"
+                                            :class="route().current('teams.*') ? 'border-indigo-400 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                                        >
+                                            Equipos
+                                            <svg class="ms-1 -me-0.5 size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                                            </svg>
+                                        </button>
+                                    </template>
+                                    <template #content>
+                                        <DropdownLink :href="route('teams.show', 'logistica')">Logística</DropdownLink>
+                                        <DropdownLink :href="route('teams.show', 'compras')">Compras</DropdownLink>
+                                        <DropdownLink :href="route('teams.show', 'infraestructura')">Infraestructura</DropdownLink>
+                                        <DropdownLink :href="route('teams.show', 'publicidad')">Publicidad</DropdownLink>
+                                    </template>
+                                </Dropdown>
                             </div>
                         </div>
 
@@ -259,6 +299,23 @@ const logout = () => {
                         >
                             Usuarios
                         </ResponsiveNavLink>
+
+                        <!-- Fase 9: "Mi equipo" para miembros (no admin) -->
+                        <ResponsiveNavLink
+                            v-if="$page.props.userTeam && !$page.props.permissions?.includes('equipos.gestionar-todos')"
+                            :href="route('teams.show', $page.props.userTeam)"
+                            :active="route().current('teams.*')"
+                        >
+                            Mi equipo
+                        </ResponsiveNavLink>
+
+                        <!-- Fase 9: links individuales de equipo para admin -->
+                        <template v-if="$page.props.permissions?.includes('equipos.gestionar-todos')">
+                            <ResponsiveNavLink :href="route('teams.show', 'logistica')" :active="$page.url.startsWith('/teams/logistica')">Logística</ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('teams.show', 'compras')" :active="$page.url.startsWith('/teams/compras')">Compras</ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('teams.show', 'infraestructura')" :active="$page.url.startsWith('/teams/infraestructura')">Infraestructura</ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('teams.show', 'publicidad')" :active="$page.url.startsWith('/teams/publicidad')">Publicidad</ResponsiveNavLink>
+                        </template>
                     </div>
 
                     <!-- Responsive Settings Options -->

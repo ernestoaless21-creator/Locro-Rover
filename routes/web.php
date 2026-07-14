@@ -11,6 +11,8 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\PendingApprovalController;
 use App\Http\Controllers\PricingController;
+use App\Http\Controllers\TeamTaskController;
+use App\Http\Controllers\TeamTaskItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\YearController;
 use App\Http\Middleware\EnsureUserHasRole;
@@ -262,4 +264,20 @@ Route::middleware([
 
     Route::post('/years/{year}/activate', [YearController::class, 'activate'])
         ->name('years.activate');
+
+    // Fase 9: equipos operativos y checklists de tareas.
+    Route::prefix('teams/{team}')
+        ->where(['team' => 'logistica|compras|infraestructura|publicidad'])
+        ->group(function () {
+            Route::get('/', [TeamTaskController::class, 'index'])->name('teams.show');
+            Route::post('/tasks', [TeamTaskController::class, 'store'])->name('teams.tasks.store');
+            Route::put('/tasks/{task}', [TeamTaskController::class, 'update'])->name('teams.tasks.update');
+            Route::post('/tasks/{task}/toggle', [TeamTaskController::class, 'toggle'])->name('teams.tasks.toggle');
+            Route::delete('/tasks/{task}', [TeamTaskController::class, 'destroy'])->name('teams.tasks.destroy');
+            // Subtareas (items) de cada tarea
+            Route::post('/tasks/{task}/items', [TeamTaskItemController::class, 'store'])->name('teams.task-items.store');
+            Route::put('/tasks/{task}/items/{item}', [TeamTaskItemController::class, 'update'])->name('teams.task-items.update');
+            Route::post('/tasks/{task}/items/{item}/toggle', [TeamTaskItemController::class, 'toggle'])->name('teams.task-items.toggle');
+            Route::delete('/tasks/{task}/items/{item}', [TeamTaskItemController::class, 'destroy'])->name('teams.task-items.destroy');
+        });
 });

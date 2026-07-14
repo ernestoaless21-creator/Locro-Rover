@@ -59,6 +59,8 @@ class HandleInertiaRequests extends Middleware
                 $user
                     ? $user->getAllPermissions()->pluck('name')
                     : [],
+
+            'userTeam' => fn () => $user?->teamSlug(),
         ];
     }
 }

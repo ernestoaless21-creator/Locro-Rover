@@ -204,15 +204,29 @@ function saveObservations(order, value) {
   })
 }
 
-// Fase 8: ancho de barra proporcional al rover con más porciones (100%).
+// Fase 8 / Fase 9 (ampliacion): gráfico de ventas por Rover con colores progresivos y línea de meta.
+const salesGoal = computed(() => props.year?.sales_goal_individual_default ?? 0)
+
 const maxPortions = computed(() => {
   if (!props.roverRanking || props.roverRanking.length === 0) return 1
-  return Math.max(...props.roverRanking.map((r) => r.total_portions), 1)
+  const maxRover = Math.max(...props.roverRanking.map((r) => r.total_portions), 1)
+  return salesGoal.value > 0 ? Math.max(maxRover, salesGoal.value) : maxRover
 })
 
 function barWidth(portions) {
   return Math.round((portions / maxPortions.value) * 100)
 }
+
+function barColor(portions) {
+  if (!salesGoal.value) return 'hsl(220, 65%, 55%)'
+  const pct = Math.min(portions / salesGoal.value, 1)
+  return `hsl(${Math.round(pct * 120)}, 65%, 45%)`
+}
+
+const goalLinePercent = computed(() => {
+  if (!salesGoal.value || maxPortions.value <= 0) return null
+  return Math.round((salesGoal.value / maxPortions.value) * 100)
+})
 
 // Fase 8 (correccion): filtros de retiro clickeables mutuamente excluyentes.
 // Se usan nombres distintos de toggleWithdrawn (que ya existe para el checkbox
@@ -333,11 +347,10 @@ function sauces(order) {
       </div>
       <div v-else class="mb-2"></div>
 
-      <!-- Fase 8: gráfico de porciones por Rover. Solo visible con permiso
-           'pedidos.ver-todos' (el backend no envía roverRanking a usuarios
-           sin ese permiso). Sin librería de gráficos: barras CSS puras. -->
+      <!-- Fase 8 / Fase 9 (ampliacion): gráfico de ventas por Rover con colores
+           progresivos (rojo→verde según % de meta) y línea de meta. -->
       <div v-if="roverRanking && roverRanking.length > 0" class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 mb-1.5">📊 Porciones por Rover</p>
+        <p class="text-xs font-semibold text-gray-600 mb-1.5">📊 Ventas por Rover</p>
         <div class="space-y-1 max-w-md">
           <div
             v-for="entry in roverRanking"
@@ -345,10 +358,20 @@ function sauces(order) {
             class="flex items-center gap-2 text-xs"
           >
             <span class="w-28 text-right text-gray-600 truncate shrink-0">{{ entry.name }}</span>
-            <div class="flex-1 bg-gray-200 rounded h-4 overflow-hidden min-w-0">
+            <!-- Contenedor externo: position relative para la línea de meta -->
+            <div class="flex-1 relative min-w-0">
+              <!-- Barra con overflow-hidden para recortar la barra coloreada -->
+              <div class="bg-gray-200 rounded h-4 overflow-hidden">
+                <div
+                  class="h-4 rounded transition-all duration-300"
+                  :style="{ width: barWidth(entry.total_portions) + '%', backgroundColor: barColor(entry.total_portions) }"
+                />
+              </div>
+              <!-- Línea de meta: fuera del overflow-hidden, sobre la barra -->
               <div
-                class="bg-blue-500 h-4 rounded transition-all duration-300"
-                :style="{ width: barWidth(entry.total_portions) + '%' }"
+                v-if="goalLinePercent !== null"
+                class="absolute top-0 bottom-0 w-px bg-white opacity-80 pointer-events-none"
+                :style="{ left: goalLinePercent + '%' }"
               />
             </div>
             <span class="shrink-0 text-gray-700 font-medium w-8 text-left">{{ entry.total_portions }}</span>

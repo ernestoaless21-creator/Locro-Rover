@@ -320,7 +320,7 @@ function createYear() {
               <input v-model.number="form.sales_goal_global" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Ej: 1500" />
             </div>
             <div>
-              <label class="text-sm text-gray-400 block mb-1">Meta individual orientativa (por Rover)</label>
+              <label class="text-sm text-gray-400 block mb-1">Meta de ventas por Rover</label>
               <input v-model.number="form.sales_goal_individual_default" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Ej: 70" />
             </div>
           </div>
