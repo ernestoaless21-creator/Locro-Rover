@@ -36,6 +36,8 @@ const props = defineProps({
   counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, gifts_count: 0, losses_count: 0 }) },
   canManageGifts: { type: Boolean, default: false },
   canManageLosses: { type: Boolean, default: false },
+  // Fase 8: ranking de porciones por Rover. null = usuario sin permiso ver-todos.
+  roverRanking: { type: Array, default: null },
 })
 
 // Fase 7 (correccion 4), seccion 3: formato de moneda compacto para la franja
@@ -202,6 +204,16 @@ function saveObservations(order, value) {
   })
 }
 
+// Fase 8: ancho de barra proporcional al rover con más porciones (100%).
+const maxPortions = computed(() => {
+  if (!props.roverRanking || props.roverRanking.length === 0) return 1
+  return Math.max(...props.roverRanking.map((r) => r.total_portions), 1)
+})
+
+function barWidth(portions) {
+  return Math.round((portions / maxPortions.value) * 100)
+}
+
 function money(value) {
   if (value === null || value === undefined) return '-'
   return `$${Number(value).toLocaleString('es-AR')}`
@@ -272,6 +284,29 @@ function sauces(order) {
         <span>🏦 {{ formatCurrency(counters.collected.banco) }} transferencia</span>
       </div>
       <div v-else class="mb-2"></div>
+
+      <!-- Fase 8: gráfico de porciones por Rover. Solo visible con permiso
+           'pedidos.ver-todos' (el backend no envía roverRanking a usuarios
+           sin ese permiso). Sin librería de gráficos: barras CSS puras. -->
+      <div v-if="roverRanking && roverRanking.length > 0" class="mb-4">
+        <p class="text-xs font-semibold text-gray-600 mb-1.5">📊 Porciones por Rover</p>
+        <div class="space-y-1 max-w-md">
+          <div
+            v-for="entry in roverRanking"
+            :key="entry.rover_id"
+            class="flex items-center gap-2 text-xs"
+          >
+            <span class="w-28 text-right text-gray-600 truncate shrink-0">{{ entry.name }}</span>
+            <div class="flex-1 bg-gray-200 rounded h-4 overflow-hidden min-w-0">
+              <div
+                class="bg-blue-500 h-4 rounded transition-all duration-300"
+                :style="{ width: barWidth(entry.total_portions) + '%' }"
+              />
+            </div>
+            <span class="shrink-0 text-gray-700 font-medium w-8 text-left">{{ entry.total_portions }}</span>
+          </div>
+        </div>
+      </div>
 
       <div class="flex flex-wrap gap-2 mb-4 items-center">
         <div class="relative">
@@ -349,6 +384,28 @@ function sauces(order) {
           <option value="delivery">Delivery</option>
           <option value="retiro">Retiro</option>
         </select>
+
+        <!-- Fase 8: filtros rápidos personales. Son toggles: activos se
+             resaltan, inactivos tienen el mismo estilo que los selects. -->
+        <button
+          class="px-3 py-2 rounded-md text-sm border transition-colors"
+          :class="filters.my_assigned_clients
+            ? 'bg-indigo-600 text-white border-indigo-500'
+            : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+          @click="reloadWith({ my_assigned_clients: filters.my_assigned_clients ? undefined : '1' })"
+        >
+          Mis clientes asignados
+        </button>
+
+        <button
+          class="px-3 py-2 rounded-md text-sm border transition-colors"
+          :class="filters.created_by_me
+            ? 'bg-purple-600 text-white border-purple-500'
+            : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+          @click="reloadWith({ created_by_me: filters.created_by_me ? undefined : '1' })"
+        >
+          Mis pedidos cargados
+        </button>
       </div>
 
       <!-- Acciones masivas -->

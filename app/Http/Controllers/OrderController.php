@@ -69,6 +69,21 @@ class OrderController extends Controller
             ->when($request->filled('delivery_type') && in_array($request->get('delivery_type'), ['delivery', 'retiro'], true), function ($q) use ($request) {
                 $q->where('take_away', $request->get('delivery_type') === 'retiro');
             })
+            // Fase 8: "Mis clientes asignados" — pedidos cuyo cliente tiene
+            // assigned_user_id = auth user en client_year_assignments para
+            // esta edicion. Distinto de rover_id: un cliente puede estar
+            // asignado al usuario incluso si la venta la cargo otro Rover.
+            ->when($request->boolean('my_assigned_clients'), function ($q) use ($user, $year) {
+                $q->whereIn('client_id', \App\Models\ClientAssignment::query()
+                    ->where('year_id', $year->id)
+                    ->where('assigned_user_id', $user->id)
+                    ->select('client_id')
+                );
+            })
+            // Fase 8: "Mis pedidos cargados" — pedidos registrados originalmente
+            // por este usuario (created_by), independientemente de quien sea
+            // el Rover responsable actual (rover_id puede ser otro).
+            ->when($request->boolean('created_by_me'), fn ($q) => $q->where('created_by', $user->id))
             ->orderByDesc('created_at')
             ->paginate(50)
             ->withQueryString();
@@ -102,7 +117,7 @@ class OrderController extends Controller
             'rovers' => $canViewAll
                 ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type'),
+            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type', 'my_assigned_clients', 'created_by_me'),
             'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
@@ -120,6 +135,11 @@ class OrderController extends Controller
             // llevar a un usuario sin acceso a un 403.
             'canManageGifts' => $user->can('regalos.gestionar'),
             'canManageLosses' => $user->can('perdidas.gestionar'),
+            // Fase 8: ranking de porciones por Rover, SOLO para quienes pueden
+            // ver todos los pedidos. Un Rover sin ese permiso no recibe este
+            // dato (el array seria parcial y engañoso si se computara solo
+            // con sus propios pedidos).
+            'roverRanking' => $canViewAll ? $this->roverRanking($year) : null,
         ]);
     }
 
@@ -205,6 +225,37 @@ class OrderController extends Controller
         }
 
         return $counters;
+    }
+
+    /**
+     * Fase 8: ranking de porciones vendidas por Rover para la edicion dada.
+     * Solo pedidos NO cancelados y con rover asignado. Ordenado de mayor a
+     * menor. No usa created_by (auditor immutable); usa rover_id (responsable
+     * actual segun la regla de negocio del proyecto, ver
+     * ClientAssignmentService::syncResponsibleForClientYear).
+     *
+     * @return list<array{rover_id:int,name:string,total_portions:int}>
+     */
+    protected function roverRanking(Year $year): array
+    {
+        $rows = Order::query()
+            ->select('rover_id', DB::raw('SUM(total_portions) as total_portions'))
+            ->where('year_id', $year->id)
+            ->where('status', '!=', 'cancelado')
+            ->whereNotNull('rover_id')
+            ->groupBy('rover_id')
+            ->orderByDesc('total_portions')
+            ->get();
+
+        $rovers = User::whereIn('id', $rows->pluck('rover_id'))
+            ->get(['id', 'name'])
+            ->keyBy('id');
+
+        return $rows->map(fn ($row) => [
+            'rover_id' => $row->rover_id,
+            'name' => $rovers[$row->rover_id]?->name ?? "Rover #{$row->rover_id}",
+            'total_portions' => (int) $row->total_portions,
+        ])->all();
     }
 
     /**
