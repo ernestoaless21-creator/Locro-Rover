@@ -348,6 +348,27 @@ function destroyDoc(doc) {
         <YearSelector :selected-year-id="year.id" />
       </div>
 
+      <!-- Fase 14: accesos a planificación de compras y proveedores (solo equipo Compras) -->
+      <div
+        v-if="team === 'compras' && $page.props.permissions?.includes('compras.planificacion.ver')"
+        class="mb-6 flex flex-wrap gap-3"
+      >
+        <a
+          :href="route('purchases.index', { team, year_id: year.id })"
+          class="flex-1 min-w-[220px] bg-white rounded-lg shadow-sm border border-gray-100 px-4 py-3 hover:border-indigo-200 hover:shadow transition"
+        >
+          <p class="text-sm font-semibold text-gray-800">📦 Planificación de compras</p>
+          <p class="text-xs text-gray-400 mt-0.5">Productos, cantidades, precios y proveedores por edición</p>
+        </a>
+        <a
+          :href="route('suppliers.index', { team })"
+          class="flex-1 min-w-[220px] bg-white rounded-lg shadow-sm border border-gray-100 px-4 py-3 hover:border-indigo-200 hover:shadow transition"
+        >
+          <p class="text-sm font-semibold text-gray-800">🏬 Proveedores</p>
+          <p class="text-xs text-gray-400 mt-0.5">Lugares de compra reutilizables entre ediciones</p>
+        </a>
+      </div>
+
       <!-- Encabezado del checklist -->
       <div class="mb-4 flex items-center justify-between gap-4">
         <h3 class="font-semibold text-gray-700 shrink-0">Checklist de tareas</h3>

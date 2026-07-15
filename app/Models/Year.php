@@ -12,7 +12,7 @@ class Year extends Model
 
     protected $fillable = [
         'year', 'label', 'portion_price', 'promo_unit_price', 'amount_for_promo',
-        'is_active', 'sale_date', 'notes', 'made_portions', 'event_type',
+        'is_active', 'sale_date', 'notes', 'schedule_notes', 'made_portions', 'event_type',
         'sauce_portions_per_block', 'sauce_units_per_block',
         'sales_goal_global', 'sales_goal_individual_default',
     ];

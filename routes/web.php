@@ -14,6 +14,14 @@ use App\Http\Controllers\PricingController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingDecisionController;
 use App\Http\Controllers\MeetingDocumentController;
+use App\Http\Controllers\PurchaseCategoryController;
+use App\Http\Controllers\PurchasePlanImportController;
+use App\Http\Controllers\PurchasePlanItemController;
+use App\Http\Controllers\PurchaseProductController;
+use App\Http\Controllers\ScheduleActivityController;
+use App\Http\Controllers\ScheduleDayController;
+use App\Http\Controllers\ScheduleImportController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TeamDocumentController;
 use App\Http\Controllers\TeamTaskController;
 use App\Http\Controllers\TeamTaskImportController;
@@ -270,6 +278,22 @@ Route::middleware([
     Route::post('/years/{year}/activate', [YearController::class, 'activate'])
         ->name('years.activate');
 
+    // Fase 13: cronograma operativo previsto vs. real.
+    Route::get('/schedule', [ScheduleDayController::class, 'index'])->name('schedule.index');
+    Route::put('/schedule/notes', [ScheduleDayController::class, 'updateNotes'])->name('schedule.notes.update');
+    Route::get('/schedule/import', [ScheduleImportController::class, 'create'])->name('schedule.import');
+    Route::post('/schedule/import', [ScheduleImportController::class, 'store'])->name('schedule.import.store');
+    Route::post('/schedule/days/reorder', [ScheduleDayController::class, 'reorder'])->name('schedule.days.reorder');
+    Route::post('/schedule/days', [ScheduleDayController::class, 'store'])->name('schedule.days.store');
+    Route::put('/schedule/days/{day}', [ScheduleDayController::class, 'update'])->name('schedule.days.update');
+    Route::delete('/schedule/days/{day}', [ScheduleDayController::class, 'destroy'])->name('schedule.days.destroy');
+    Route::post('/schedule/days/{day}/activities/reorder', [ScheduleActivityController::class, 'reorder'])->name('schedule.activities.reorder');
+    Route::post('/schedule/days/{day}/activities', [ScheduleActivityController::class, 'store'])->name('schedule.activities.store');
+    Route::put('/schedule/days/{day}/activities/{activity}', [ScheduleActivityController::class, 'update'])->name('schedule.activities.update');
+    Route::delete('/schedule/days/{day}/activities/{activity}', [ScheduleActivityController::class, 'destroy'])->name('schedule.activities.destroy');
+    Route::post('/schedule/days/{day}/activities/{activity}/status', [ScheduleActivityController::class, 'updateStatus'])->name('schedule.activities.status');
+    Route::put('/schedule/days/{day}/activities/{activity}/execution', [ScheduleActivityController::class, 'updateExecution'])->name('schedule.activities.execution');
+
     // Fase 12: actas y reuniones.
     Route::get('/meetings', [MeetingController::class, 'index'])->name('meetings.index');
     Route::get('/meetings/create', [MeetingController::class, 'create'])->name('meetings.create');
@@ -307,5 +331,32 @@ Route::middleware([
             Route::put('/documents/{doc}', [TeamDocumentController::class, 'update'])->name('teams.documents.update');
             Route::get('/documents/{doc}/download', [TeamDocumentController::class, 'download'])->name('teams.documents.download');
             Route::delete('/documents/{doc}', [TeamDocumentController::class, 'destroy'])->name('teams.documents.destroy');
+        });
+
+    // Fase 14: planificación histórica de compras y proveedores. Integrado
+    // visualmente dentro del equipo Compras (identificado por el mismo slug
+    // 'team' que el resto de las rutas de equipos, nunca por un ID), pero el
+    // catálogo (productos/categorías/proveedores) y la planificación por
+    // edición viven en sus propias tablas, no atadas a un "equipo" en la BD.
+    Route::prefix('teams/{team}/purchases')
+        ->where(['team' => 'compras'])
+        ->group(function () {
+            Route::get('/', [PurchasePlanItemController::class, 'index'])->name('purchases.index');
+            Route::post('/items', [PurchasePlanItemController::class, 'store'])->name('purchases.items.store');
+            Route::put('/items/{item}', [PurchasePlanItemController::class, 'update'])->name('purchases.items.update');
+            Route::delete('/items/{item}', [PurchasePlanItemController::class, 'destroy'])->name('purchases.items.destroy');
+            Route::post('/products', [PurchaseProductController::class, 'store'])->name('purchases.products.store');
+            Route::put('/products/{product}', [PurchaseProductController::class, 'update'])->name('purchases.products.update');
+            Route::post('/categories', [PurchaseCategoryController::class, 'store'])->name('purchases.categories.store');
+            Route::get('/import', [PurchasePlanImportController::class, 'create'])->name('purchases.import');
+            Route::post('/import', [PurchasePlanImportController::class, 'store'])->name('purchases.import.store');
+        });
+
+    Route::prefix('teams/{team}/suppliers')
+        ->where(['team' => 'compras'])
+        ->group(function () {
+            Route::get('/', [SupplierController::class, 'index'])->name('suppliers.index');
+            Route::post('/', [SupplierController::class, 'store'])->name('suppliers.store');
+            Route::put('/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         });
 });

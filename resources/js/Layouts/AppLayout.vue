@@ -98,6 +98,15 @@ const logout = () => {
                                     Actas
                                 </NavLink>
 
+                                <!-- Fase 13: Cronograma operativo -->
+                                <NavLink
+                                    v-if="$page.props.permissions?.includes('cronograma.ver')"
+                                    :href="route('schedule.index')"
+                                    :active="route().current('schedule.*')"
+                                >
+                                    Cronograma
+                                </NavLink>
+
                                 <!-- Fase 9: "Mi equipo" para miembros de equipo (no admin) -->
                                 <NavLink
                                     v-if="$page.props.userTeam && !$page.props.permissions?.includes('equipos.gestionar-todos')"
@@ -318,6 +327,15 @@ const logout = () => {
                             :active="route().current('meetings.*')"
                         >
                             Actas
+                        </ResponsiveNavLink>
+
+                        <!-- Fase 13: Cronograma operativo -->
+                        <ResponsiveNavLink
+                            v-if="$page.props.permissions?.includes('cronograma.ver')"
+                            :href="route('schedule.index')"
+                            :active="route().current('schedule.*')"
+                        >
+                            Cronograma
                         </ResponsiveNavLink>
 
                         <!-- Fase 9: "Mi equipo" para miembros (no admin) -->

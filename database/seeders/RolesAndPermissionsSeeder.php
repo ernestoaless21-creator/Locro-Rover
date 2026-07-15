@@ -78,6 +78,15 @@ class RolesAndPermissionsSeeder extends Seeder
             // Actas y reuniones
             'actas.ver',
             'actas.gestionar',
+            // Cronograma operativo
+            'cronograma.ver',
+            'cronograma.gestionar',
+            // Fase 14: planificacion de compras y proveedores.
+            // 'proveedores.gestionar' YA estaba definido (ver mas arriba, seccion
+            // Finanzas) y sin uso todavia: se reutiliza aca en vez de crear un
+            // permiso paralelo para el mismo concepto.
+            'compras.planificacion.ver',
+            'compras.planificacion.gestionar',
             // Administracion
             'usuarios.gestionar',
             'roles.gestionar',
@@ -101,6 +110,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'asignaciones.ver',
             'tareas.ver',
             'actas.ver',
+            'cronograma.ver',
+            // Fase 14: la planificacion de compras se puede VER ampliamente
+            // (no solo el equipo Compras la usa), igual que cronograma.ver;
+            // gestionarla (planificacion.gestionar / proveedores.gestionar)
+            // queda acotado a admin + jefe_compras mas abajo.
+            'compras.planificacion.ver',
         ];
 
         // --- Permisos exclusivos de admin/jefe_logistica/logistica (seccion 13). ---
@@ -133,6 +148,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'parametros.gestionar', 'anios.gestionar', 'documentos.gestionar', 'auditoria.ver',
             'tareas.gestionar-propio-equipo',
             'actas.gestionar',
+            'cronograma.gestionar',
         ]);
 
         $logistica = Role::firstOrCreate(['name' => 'logistica', 'guard_name' => 'web']);
@@ -143,12 +159,18 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Compras, Infraestructura y Publicidad: mismo set operativo base
         // ("todos venden"), sin los permisos exclusivos de Logistica. Cada
-        // equipo tiene su jefe con el mismo set que su equipo (esta fase no
-        // agrega permisos especificos de gestion de Compras/Infraestructura/
-        // Publicidad todavia, ver seccion 19: no se avanza a esos modulos).
+        // equipo tiene su jefe con el mismo set que su equipo, salvo Compras
+        // (Fase 14), cuyo jefe ademas gestiona la planificacion de compras y
+        // los proveedores: es una funcionalidad de dominio especifico del
+        // equipo, a diferencia del cronograma (compartido entre todos).
         foreach (['compras', 'infraestructura', 'publicidad'] as $team) {
             $jefeRole = Role::firstOrCreate(['name' => "jefe_{$team}", 'guard_name' => 'web']);
-            $jefeRole->syncPermissions([...$commonOperational, 'tareas.gestionar-propio-equipo', 'actas.gestionar']);
+            $jefePermissions = [...$commonOperational, 'tareas.gestionar-propio-equipo', 'actas.gestionar', 'cronograma.gestionar'];
+            if ($team === 'compras') {
+                $jefePermissions[] = 'compras.planificacion.gestionar';
+                $jefePermissions[] = 'proveedores.gestionar';
+            }
+            $jefeRole->syncPermissions($jefePermissions);
 
             $teamRole = Role::firstOrCreate(['name' => $team, 'guard_name' => 'web']);
             $teamRole->syncPermissions($commonOperational);
