@@ -99,9 +99,27 @@ class PurchasePlanningPhase14Test extends TestCase
             ->assertInertia(fn ($page) => $page->component('Purchases/Index'));
     }
 
-    public function test_compras_member_cannot_manage_plan(): void
+    public function test_compras_member_can_manage_plan(): void
     {
+        // Fase 15, Parte A: cualquier integrante de Compras puede gestionar
+        // la planificación, no solo el jefe.
         $member = $this->makeMember('compras');
+        $product = $this->makeProduct();
+
+        $this->actingAs($member)
+            ->post(route('purchases.items.store', ['team' => 'compras']), [
+                'purchase_product_id' => $product->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('purchase_plan_items', ['purchase_product_id' => $product->id]);
+    }
+
+    public function test_other_team_member_cannot_manage_purchase_plan(): void
+    {
+        // El cambio de la Fase 15 amplía el permiso a "cualquier integrante
+        // del equipo dueño de la herramienta", no a cualquier operativo.
+        $member = $this->makeMember('publicidad');
         $product = $this->makeProduct();
 
         $this->actingAs($member)
@@ -164,11 +182,23 @@ class PurchasePlanningPhase14Test extends TestCase
             ->assertNotFound();
     }
 
-    public function test_member_cannot_manage_suppliers(): void
+    public function test_compras_member_can_manage_suppliers(): void
     {
+        // Fase 15, Parte A: cualquier integrante de Compras puede gestionar
+        // proveedores, no solo el jefe.
         $member = $this->makeMember('compras');
         $this->actingAs($member)
             ->post(route('suppliers.store', ['team' => 'compras']), ['name' => 'X'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('suppliers', ['name' => 'X']);
+    }
+
+    public function test_other_team_member_cannot_manage_suppliers(): void
+    {
+        $member = $this->makeMember('publicidad');
+        $this->actingAs($member)
+            ->post(route('suppliers.store', ['team' => 'compras']), ['name' => 'Y'])
             ->assertForbidden();
     }
 
@@ -548,10 +578,26 @@ class PurchasePlanningPhase14Test extends TestCase
         $this->assertEquals('Zapallo', $product->fresh()->name);
     }
 
-    public function test_member_cannot_edit_product(): void
+    public function test_compras_member_can_edit_product(): void
     {
+        // Fase 15, Parte A: cualquier integrante de Compras puede gestionar
+        // el catálogo, no solo el jefe.
         $product = $this->makeProduct();
         $member = $this->makeMember('compras');
+
+        $this->actingAs($member)
+            ->put(route('purchases.products.update', ['team' => 'compras', 'product' => $product->id]), [
+                'name' => 'Otro nombre',
+            ])
+            ->assertRedirect();
+
+        $this->assertEquals('Otro nombre', $product->fresh()->name);
+    }
+
+    public function test_other_team_member_cannot_edit_product(): void
+    {
+        $product = $this->makeProduct();
+        $member = $this->makeMember('publicidad');
 
         $this->actingAs($member)
             ->put(route('purchases.products.update', ['team' => 'compras', 'product' => $product->id]), [
@@ -783,9 +829,19 @@ class PurchasePlanningPhase14Test extends TestCase
         $this->assertEquals('999.000', $targetItems->first()->qty_1000);
     }
 
-    public function test_member_cannot_access_import_page(): void
+    public function test_compras_member_can_access_import_page(): void
     {
+        // Fase 15, Parte A: cualquier integrante de Compras puede importar,
+        // no solo el jefe.
         $member = $this->makeMember('compras');
+        $this->actingAs($member)
+            ->get(route('purchases.import', ['team' => 'compras']))
+            ->assertOk();
+    }
+
+    public function test_other_team_member_cannot_access_import_page(): void
+    {
+        $member = $this->makeMember('publicidad');
         $this->actingAs($member)
             ->get(route('purchases.import', ['team' => 'compras']))
             ->assertForbidden();

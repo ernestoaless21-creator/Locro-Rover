@@ -151,13 +151,15 @@ class TeamPhase9Test extends TestCase
         $response->assertInertia(fn ($page) => $page->where('canManage', true));
     }
 
-    public function test_canManage_is_false_for_member(): void
+    public function test_canManage_is_true_for_member(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede gestionar
+        // sus herramientas, no solo el jefe.
         $member = $this->makeMember('logistica');
 
         $response = $this->actingAs($member)->get('/teams/logistica');
 
-        $response->assertInertia(fn ($page) => $page->where('canManage', false));
+        $response->assertInertia(fn ($page) => $page->where('canManage', true));
     }
 
     public function test_canManage_is_true_for_admin(): void
@@ -226,14 +228,16 @@ class TeamPhase9Test extends TestCase
         ]);
     }
 
-    public function test_member_cannot_create_task(): void
+    public function test_member_can_create_task(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede gestionar
+        // sus herramientas, no solo el jefe.
         $member = $this->makeMember('logistica');
 
         $response = $this->actingAs($member)->post('/teams/logistica/tasks', ['title' => 'Nueva tarea']);
 
-        $response->assertForbidden();
-        $this->assertDatabaseCount('team_tasks', 0);
+        $response->assertRedirect();
+        $this->assertDatabaseHas('team_tasks', ['team' => 'logistica', 'title' => 'Nueva tarea']);
     }
 
     public function test_task_title_is_required(): void
@@ -268,16 +272,18 @@ class TeamPhase9Test extends TestCase
         $this->assertDatabaseHas('team_tasks', ['id' => $task->id, 'title' => 'Título editado']);
     }
 
-    public function test_member_cannot_update_task(): void
+    public function test_member_can_update_task(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede editar,
+        // no solo el jefe.
         $jefe = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task = $this->createTask('logistica', $jefe);
 
-        $response = $this->actingAs($member)->put("/teams/logistica/tasks/{$task->id}", ['title' => 'Intento fallido']);
+        $response = $this->actingAs($member)->put("/teams/logistica/tasks/{$task->id}", ['title' => 'Editado por integrante']);
 
-        $response->assertForbidden();
-        $this->assertDatabaseHas('team_tasks', ['id' => $task->id, 'title' => 'Tarea de prueba']);
+        $response->assertRedirect();
+        $this->assertDatabaseHas('team_tasks', ['id' => $task->id, 'title' => 'Editado por integrante']);
     }
 
     // ---------- TOGGLE ---------------------------------------------------
@@ -309,16 +315,18 @@ class TeamPhase9Test extends TestCase
         $this->assertNull($task->completed_by);
     }
 
-    public function test_member_cannot_toggle_task(): void
+    public function test_member_can_toggle_task(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede completar
+        // tareas, no solo el jefe.
         $jefe = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task = $this->createTask('logistica', $jefe);
 
         $response = $this->actingAs($member)->post("/teams/logistica/tasks/{$task->id}/toggle");
 
-        $response->assertForbidden();
-        $this->assertFalse($task->fresh()->is_completed);
+        $response->assertRedirect();
+        $this->assertTrue($task->fresh()->is_completed);
     }
 
     // ---------- ELIMINAR TAREA -------------------------------------------
@@ -334,16 +342,18 @@ class TeamPhase9Test extends TestCase
         $this->assertDatabaseMissing('team_tasks', ['id' => $task->id]);
     }
 
-    public function test_member_cannot_delete_task(): void
+    public function test_member_can_delete_task(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede eliminar,
+        // no solo el jefe.
         $jefe = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task = $this->createTask('logistica', $jefe);
 
         $response = $this->actingAs($member)->delete("/teams/logistica/tasks/{$task->id}");
 
-        $response->assertForbidden();
-        $this->assertDatabaseHas('team_tasks', ['id' => $task->id]);
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('team_tasks', ['id' => $task->id]);
     }
 
     // ---------- ACCESO CRUZADO ENTRE EQUIPOS -----------------------------
@@ -444,13 +454,15 @@ class TeamPhase9Test extends TestCase
         }
     }
 
-    public function test_member_roles_do_not_have_gestionar_permission(): void
+    public function test_member_roles_have_gestionar_permission(): void
     {
+        // Fase 15, Parte A: ser jefe ya no es condicion para poder gestionar
+        // las tareas del propio equipo. Cualquier integrante lo puede hacer.
         foreach (['logistica', 'compras', 'infraestructura', 'publicidad'] as $team) {
             $role = \Spatie\Permission\Models\Role::where('name', $team)->first();
-            $this->assertFalse(
+            $this->assertTrue(
                 $role->permissions->contains('name', 'tareas.gestionar-propio-equipo'),
-                "El rol {$team} NO debe tener tareas.gestionar-propio-equipo"
+                "El rol {$team} debe tener tareas.gestionar-propio-equipo (Fase 15, Parte A)"
             );
         }
     }
@@ -681,17 +693,19 @@ class TeamPhase9Test extends TestCase
         ]);
     }
 
-    public function test_member_cannot_create_item(): void
+    public function test_member_can_create_item(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede gestionar
+        // subtareas, no solo el jefe.
         $jefe   = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task   = $this->createTask('logistica', $jefe);
 
         $this->actingAs($member)
             ->post("/teams/logistica/tasks/{$task->id}/items", ['title' => 'Paso'])
-            ->assertForbidden();
+            ->assertRedirect();
 
-        $this->assertDatabaseCount('team_task_items', 0);
+        $this->assertDatabaseHas('team_task_items', ['team_task_id' => $task->id, 'title' => 'Paso']);
     }
 
     public function test_other_team_jefe_cannot_create_item(): void
@@ -754,8 +768,10 @@ class TeamPhase9Test extends TestCase
         $this->assertDatabaseHas('team_task_items', ['id' => $item->id, 'title' => 'Paso editado']);
     }
 
-    public function test_member_cannot_update_item(): void
+    public function test_member_can_update_item(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede editar
+        // subtareas, no solo el jefe.
         $jefe   = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task   = $this->createTask('logistica', $jefe);
@@ -766,10 +782,10 @@ class TeamPhase9Test extends TestCase
         ]);
 
         $this->actingAs($member)
-            ->put("/teams/logistica/tasks/{$task->id}/items/{$item->id}", ['title' => 'Hackeado'])
-            ->assertForbidden();
+            ->put("/teams/logistica/tasks/{$task->id}/items/{$item->id}", ['title' => 'Editado por integrante'])
+            ->assertRedirect();
 
-        $this->assertDatabaseHas('team_task_items', ['id' => $item->id, 'title' => 'Original']);
+        $this->assertDatabaseHas('team_task_items', ['id' => $item->id, 'title' => 'Editado por integrante']);
     }
 
     // ---------- SUBTAREAS: TOGGLE ----------------------------------------
@@ -812,8 +828,10 @@ class TeamPhase9Test extends TestCase
         $this->assertNull($item->completed_by);
     }
 
-    public function test_member_cannot_toggle_item(): void
+    public function test_member_can_toggle_item(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede completar
+        // subtareas, no solo el jefe.
         $jefe   = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task   = $this->createTask('logistica', $jefe);
@@ -825,9 +843,9 @@ class TeamPhase9Test extends TestCase
 
         $this->actingAs($member)
             ->post("/teams/logistica/tasks/{$task->id}/items/{$item->id}/toggle")
-            ->assertForbidden();
+            ->assertRedirect();
 
-        $this->assertFalse($item->fresh()->is_completed);
+        $this->assertTrue($item->fresh()->is_completed);
     }
 
     // ---------- SUBTAREAS: ELIMINAR --------------------------------------
@@ -849,22 +867,24 @@ class TeamPhase9Test extends TestCase
         $this->assertDatabaseMissing('team_task_items', ['id' => $item->id]);
     }
 
-    public function test_member_cannot_delete_item(): void
+    public function test_member_can_delete_item(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede eliminar
+        // subtareas, no solo el jefe.
         $jefe   = $this->makeJefe('logistica');
         $member = $this->makeMember('logistica');
         $task   = $this->createTask('logistica', $jefe);
         $item   = \App\Models\TeamTaskItem::create([
             'team_task_id' => $task->id,
-            'title'        => 'Protegido',
+            'title'        => 'A eliminar',
             'created_by'   => $jefe->id,
         ]);
 
         $this->actingAs($member)
             ->delete("/teams/logistica/tasks/{$task->id}/items/{$item->id}")
-            ->assertForbidden();
+            ->assertRedirect();
 
-        $this->assertDatabaseHas('team_task_items', ['id' => $item->id]);
+        $this->assertDatabaseMissing('team_task_items', ['id' => $item->id]);
     }
 
     // ---------- SUBTAREAS: ORDEN -----------------------------------------
@@ -1162,18 +1182,26 @@ class TeamPhase9Test extends TestCase
 
     public function test_sync_respects_permissions_no_regression(): void
     {
-        $jefe   = $this->makeJefe('logistica');
-        $member = $this->makeMember('logistica');
-        $task   = $this->createTask('logistica', $jefe);
-        $item   = $this->makeItem($task, $jefe);
+        // Fase 15, Parte A: el member de logistica ahora SI puede gestionar
+        // (es integrante del equipo), pero un integrante de OTRO equipo
+        // sigue sin poder tocar nada de logistica.
+        $jefe        = $this->makeJefe('logistica');
+        $otherMember = $this->makeMember('publicidad');
+        $task        = $this->createTask('logistica', $jefe);
+        $item        = $this->makeItem($task, $jefe);
 
-        // El member no puede hacer toggle de la tarea (y por tanto no puede sincronizar)
-        $this->actingAs($member)->post("/teams/logistica/tasks/{$task->id}/toggle")->assertForbidden();
+        $this->actingAs($otherMember)->post("/teams/logistica/tasks/{$task->id}/toggle")->assertForbidden();
         $this->assertFalse($task->fresh()->is_completed);
         $this->assertFalse($item->fresh()->is_completed);
 
-        // El member tampoco puede hacer toggle del item
-        $this->actingAs($member)->post("/teams/logistica/tasks/{$task->id}/items/{$item->id}/toggle")->assertForbidden();
+        $this->actingAs($otherMember)->post("/teams/logistica/tasks/{$task->id}/items/{$item->id}/toggle")->assertForbidden();
         $this->assertFalse($item->fresh()->is_completed);
+
+        // Sincronización real: un integrante DEL PROPIO equipo sí puede, y
+        // completar todos los ítems auto-completa la tarea.
+        $member = $this->makeMember('logistica');
+        $this->actingAs($member)->post("/teams/logistica/tasks/{$task->id}/items/{$item->id}/toggle")->assertRedirect();
+        $this->assertTrue($item->fresh()->is_completed);
+        $this->assertTrue($task->fresh()->is_completed);
     }
 }

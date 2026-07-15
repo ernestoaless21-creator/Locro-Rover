@@ -14,6 +14,10 @@ use App\Http\Controllers\PricingController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingDecisionController;
 use App\Http\Controllers\MeetingDocumentController;
+use App\Http\Controllers\InfrastructureImportController;
+use App\Http\Controllers\InfrastructureInventoryController;
+use App\Http\Controllers\InfrastructureItemController;
+use App\Http\Controllers\InfrastructureLoanController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchasePlanImportController;
 use App\Http\Controllers\PurchasePlanItemController;
@@ -358,5 +362,25 @@ Route::middleware([
             Route::get('/', [SupplierController::class, 'index'])->name('suppliers.index');
             Route::post('/', [SupplierController::class, 'store'])->name('suppliers.store');
             Route::put('/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        });
+
+    // Fase 15: inventario historico de infraestructura y gestion de prestamos.
+    // Mismo patron que Compras (Fase 14): catalogo/inventario/prestamos no
+    // atados a un ID de equipo, identificados via el slug 'team' en la ruta.
+    Route::prefix('teams/{team}/infrastructure')
+        ->where(['team' => 'infraestructura'])
+        ->group(function () {
+            Route::get('/', [InfrastructureInventoryController::class, 'index'])->name('infrastructure.index');
+            Route::post('/inventory', [InfrastructureInventoryController::class, 'store'])->name('infrastructure.inventory.store');
+            Route::put('/inventory/{inventory}', [InfrastructureInventoryController::class, 'update'])->name('infrastructure.inventory.update');
+            Route::delete('/inventory/{inventory}', [InfrastructureInventoryController::class, 'destroy'])->name('infrastructure.inventory.destroy');
+            Route::post('/items', [InfrastructureItemController::class, 'store'])->name('infrastructure.items.store');
+            Route::put('/items/{item}', [InfrastructureItemController::class, 'update'])->name('infrastructure.items.update');
+            Route::post('/loans', [InfrastructureLoanController::class, 'store'])->name('infrastructure.loans.store');
+            Route::put('/loans/{loan}', [InfrastructureLoanController::class, 'update'])->name('infrastructure.loans.update');
+            Route::post('/loans/{loan}/status', [InfrastructureLoanController::class, 'updateStatus'])->name('infrastructure.loans.status');
+            Route::delete('/loans/{loan}', [InfrastructureLoanController::class, 'destroy'])->name('infrastructure.loans.destroy');
+            Route::get('/import', [InfrastructureImportController::class, 'create'])->name('infrastructure.import');
+            Route::post('/import', [InfrastructureImportController::class, 'store'])->name('infrastructure.import.store');
         });
 });

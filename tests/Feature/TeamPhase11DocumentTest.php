@@ -84,14 +84,18 @@ class TeamPhase11DocumentTest extends TestCase
         $this->post('/teams/logistica/documents', [])->assertRedirect('/login');
     }
 
-    public function test_member_cannot_upload_document(): void
+    public function test_member_can_upload_document(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede subir
+        // documentos, no solo el jefe.
         $member = $this->makeMember('logistica');
 
         $this->actingAs($member)->post('/teams/logistica/documents', [
             'name' => 'Test',
             'file' => $this->fakeFile(),
-        ])->assertForbidden();
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('team_documents', ['team' => 'logistica', 'name' => 'Test']);
     }
 
     public function test_jefe_can_upload_document_for_own_team(): void
@@ -300,15 +304,19 @@ class TeamPhase11DocumentTest extends TestCase
         ]);
     }
 
-    public function test_member_cannot_edit_document(): void
+    public function test_member_can_edit_document(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede editar
+        // documentos, no solo el jefe.
         $admin  = $this->makeAdmin();
         $member = $this->makeMember('logistica');
         $doc    = $this->createDocument('logistica', $admin);
 
         $this->actingAs($member)->put("/teams/logistica/documents/{$doc->id}", [
-            'name' => 'Intento',
-        ])->assertForbidden();
+            'name' => 'Editado por integrante',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('team_documents', ['id' => $doc->id, 'name' => 'Editado por integrante']);
     }
 
     public function test_jefe_cannot_edit_document_from_another_team(): void
@@ -346,13 +354,17 @@ class TeamPhase11DocumentTest extends TestCase
         Storage::disk('local')->assertMissing($path);
     }
 
-    public function test_member_cannot_delete_document(): void
+    public function test_member_can_delete_document(): void
     {
+        // Fase 15, Parte A: cualquier integrante del equipo puede eliminar
+        // documentos, no solo el jefe.
         $admin  = $this->makeAdmin();
         $member = $this->makeMember('logistica');
         $doc    = $this->createDocument('logistica', $admin);
 
-        $this->actingAs($member)->delete("/teams/logistica/documents/{$doc->id}")->assertForbidden();
+        $this->actingAs($member)->delete("/teams/logistica/documents/{$doc->id}")->assertRedirect();
+
+        $this->assertDatabaseMissing('team_documents', ['id' => $doc->id]);
     }
 
     public function test_jefe_cannot_delete_document_from_another_team(): void

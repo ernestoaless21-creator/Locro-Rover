@@ -87,6 +87,9 @@ class RolesAndPermissionsSeeder extends Seeder
             // permiso paralelo para el mismo concepto.
             'compras.planificacion.ver',
             'compras.planificacion.gestionar',
+            // Fase 15: inventario de infraestructura y prestamos.
+            'infraestructura.inventario.ver',
+            'infraestructura.inventario.gestionar',
             // Administracion
             'usuarios.gestionar',
             'roles.gestionar',
@@ -103,19 +106,32 @@ class RolesAndPermissionsSeeder extends Seeder
         // --- Permisos comunes a TODOS los roles operativos (seccion 2 y 13:
         // "todos venden"): ver/crear pedidos y clientes, ver todos los
         // pedidos/clientes, pagos, retiro, y el seguimiento de asignaciones. ---
+        //
+        // Fase 15, Parte A: 'tareas.gestionar-propio-equipo' se movio aca
+        // (antes solo la tenian los roles jefe_*). Ser jefe/responsable de un
+        // equipo NO debe otorgar privilegios exclusivos de edicion: cualquier
+        // integrante debe poder gestionar tareas/documentos de su propio
+        // equipo. El scope real (SOLO el equipo propio, salvo admin) sigue
+        // aplicandose en runtime via User::teamSlug() en
+        // TeamTaskController/TeamTaskItemController/TeamDocumentController::
+        // authorizeTeamAccess(), asi que este permiso amplio no abre acceso
+        // cruzado entre equipos.
         $commonOperational = [
             'clientes.ver', 'clientes.crear', 'clientes.editar',
             'pedidos.ver', 'pedidos.crear', 'pedidos.editar',
             'pedidos.ver-todos', 'pedidos.retirar', 'pagos.registrar',
             'asignaciones.ver',
             'tareas.ver',
+            'tareas.gestionar-propio-equipo',
             'actas.ver',
             'cronograma.ver',
             // Fase 14: la planificacion de compras se puede VER ampliamente
             // (no solo el equipo Compras la usa), igual que cronograma.ver;
             // gestionarla (planificacion.gestionar / proveedores.gestionar)
-            // queda acotado a admin + jefe_compras mas abajo.
+            // queda acotada a admin + integrantes de Compras mas abajo.
             'compras.planificacion.ver',
+            // Fase 15: mismo criterio para el inventario de infraestructura.
+            'infraestructura.inventario.ver',
         ];
 
         // --- Permisos exclusivos de admin/jefe_logistica/logistica (seccion 13). ---
@@ -140,13 +156,18 @@ class RolesAndPermissionsSeeder extends Seeder
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin->syncPermissions(Permission::all());
 
+        // jefe_logistica conserva un bloque de privilegios administrativos
+        // (gastos/parametros/anios/documentos/auditoria) que NO son
+        // "herramientas de equipo" sino un rol de tipo adjunto-a-admin
+        // preexistente: Fase 15 Parte A no lo toca (ver informe de la fase).
+        // 'tareas.gestionar-propio-equipo' ya viene incluido via
+        // $commonOperational, no hace falta repetirlo aca.
         $jefeLogistica = Role::firstOrCreate(['name' => 'jefe_logistica', 'guard_name' => 'web']);
         $jefeLogistica->syncPermissions([
             ...$commonOperational,
             ...$logisticsOnly,
             'gastos.gestionar', 'proveedores.gestionar',
             'parametros.gestionar', 'anios.gestionar', 'documentos.gestionar', 'auditoria.ver',
-            'tareas.gestionar-propio-equipo',
             'actas.gestionar',
             'cronograma.gestionar',
         ]);
@@ -158,22 +179,39 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
 
         // Compras, Infraestructura y Publicidad: mismo set operativo base
-        // ("todos venden"), sin los permisos exclusivos de Logistica. Cada
-        // equipo tiene su jefe con el mismo set que su equipo, salvo Compras
-        // (Fase 14), cuyo jefe ademas gestiona la planificacion de compras y
-        // los proveedores: es una funcionalidad de dominio especifico del
-        // equipo, a diferencia del cronograma (compartido entre todos).
+        // ("todos venden"), sin los permisos exclusivos de Logistica.
+        //
+        // Fase 15, Parte A: jefe_{team} y {team} ahora reciben el MISMO set
+        // de permisos de gestion de las herramientas propias del equipo
+        // (Compras -> planificacion+proveedores; Infraestructura ->
+        // inventario+prestamos). Ser jefe deja de ser condicion para poder
+        // editar: solo sigue siendo jefe/responsable a nivel organizativo
+        // (el rol jefe_* en si mismo, visible en /users, es la unica
+        // informacion "historica" de responsable que se conserva - no hay
+        // año/edicion asociado a esa asignacion). jefe_* conserva
+        // exclusivamente 'actas.gestionar' y 'cronograma.gestionar', que son
+        // herramientas COMPARTIDAS entre todos los equipos (no propias de
+        // uno solo) y quedan fuera del alcance de este cambio.
         foreach (['compras', 'infraestructura', 'publicidad'] as $team) {
+            $teamToolPermissions = match ($team) {
+                'compras'         => ['compras.planificacion.gestionar', 'proveedores.gestionar'],
+                'infraestructura' => ['infraestructura.inventario.gestionar'],
+                default           => [],
+            };
+
             $jefeRole = Role::firstOrCreate(['name' => "jefe_{$team}", 'guard_name' => 'web']);
-            $jefePermissions = [...$commonOperational, 'tareas.gestionar-propio-equipo', 'actas.gestionar', 'cronograma.gestionar'];
-            if ($team === 'compras') {
-                $jefePermissions[] = 'compras.planificacion.gestionar';
-                $jefePermissions[] = 'proveedores.gestionar';
-            }
-            $jefeRole->syncPermissions($jefePermissions);
+            $jefeRole->syncPermissions([
+                ...$commonOperational,
+                'actas.gestionar',
+                'cronograma.gestionar',
+                ...$teamToolPermissions,
+            ]);
 
             $teamRole = Role::firstOrCreate(['name' => $team, 'guard_name' => 'web']);
-            $teamRole->syncPermissions($commonOperational);
+            $teamRole->syncPermissions([
+                ...$commonOperational,
+                ...$teamToolPermissions,
+            ]);
         }
 
         // --- Roles legacy (Fase 6A, seccion 14): se preservan tal cual si ya

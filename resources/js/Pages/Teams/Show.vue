@@ -369,6 +369,20 @@ function destroyDoc(doc) {
         </a>
       </div>
 
+      <!-- Fase 15: acceso al inventario de infraestructura (solo ese equipo) -->
+      <div
+        v-if="team === 'infraestructura' && $page.props.permissions?.includes('infraestructura.inventario.ver')"
+        class="mb-6 flex flex-wrap gap-3"
+      >
+        <a
+          :href="route('infrastructure.index', { team, year_id: year.id })"
+          class="flex-1 min-w-[220px] bg-white rounded-lg shadow-sm border border-gray-100 px-4 py-3 hover:border-indigo-200 hover:shadow transition"
+        >
+          <p class="text-sm font-semibold text-gray-800">🧰 Inventario de infraestructura</p>
+          <p class="text-xs text-gray-400 mt-0.5">Elementos propios, necesidades, reparaciones y préstamos por edición</p>
+        </a>
+      </div>
+
       <!-- Encabezado del checklist -->
       <div class="mb-4 flex items-center justify-between gap-4">
         <h3 class="font-semibold text-gray-700 shrink-0">Checklist de tareas</h3>
