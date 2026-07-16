@@ -32,13 +32,24 @@ class OrderPolicy
         return $user->can('pedidos.crear');
     }
 
+    /**
+     * Fase 18.1: 'pedidos.ver-todos' es deliberadamente comun a TODOS los
+     * roles operativos (ver RolesAndPermissionsSeeder, "todos venden, todos
+     * ven todo"), asi que ya no sirve para acotar quien puede EDITAR un
+     * pedido ajeno -- eso permitia a cualquier Rover editar pedidos de
+     * cualquier otro. Se reutiliza 'pedidos.asignar-rover' (exclusivo de
+     * admin/jefe_logistica/logistica, ver seeder) como el permiso real de
+     * "puede editar cualquier pedido, no solo el propio", en vez de crear un
+     * permiso nuevo redundante. Ver el mismo criterio aplicado en
+     * ClientPolicy::update.
+     */
     public function update(User $user, Order $order): bool
     {
         if (! $user->can('pedidos.editar')) {
             return false;
         }
 
-        return $user->can('pedidos.ver-todos') || $order->rover_id === $user->id;
+        return $user->can('pedidos.asignar-rover') || $order->rover_id === $user->id;
     }
 
     public function delete(User $user, Order $order): bool

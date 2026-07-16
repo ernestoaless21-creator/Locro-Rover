@@ -179,7 +179,7 @@ function createYear() {
 
     <div class="py-4 max-w-3xl mx-auto px-4 space-y-6">
       <!-- Listado de ediciones -->
-      <div class="bg-gray-900 text-white rounded-lg p-6">
+      <div class="bg-surface border border-border text-white rounded-lg p-5">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-sm text-gray-400">Ediciones</h3>
           <button type="button" class="text-blue-400 hover:text-blue-300 text-sm" @click="showNewYear = !showNewYear">
@@ -187,18 +187,18 @@ function createYear() {
           </button>
         </div>
 
-        <div v-if="showNewYear" class="bg-gray-800 rounded-md p-4 mb-4 space-y-2">
+        <div v-if="showNewYear" class="bg-surface-3 rounded-md p-4 mb-4 space-y-2">
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-xs text-gray-400">Año</label>
-              <input v-model.number="newYear.year" type="number" class="w-full bg-gray-900 border border-gray-600 rounded-md px-2 py-1 text-sm" />
+              <input v-model.number="newYear.year" type="number" class="w-full bg-surface border border-border-soft rounded-md px-2 py-1 text-sm" />
             </div>
             <div>
               <label class="text-xs text-gray-400">Precio por porción</label>
-              <input v-model.number="newYear.portion_price" type="number" min="0" step="0.01" class="w-full bg-gray-900 border border-gray-600 rounded-md px-2 py-1 text-sm" />
+              <input v-model.number="newYear.portion_price" type="number" min="0" step="0.01" class="w-full bg-surface border border-border-soft rounded-md px-2 py-1 text-sm" />
             </div>
           </div>
-          <input v-model="newYear.label" type="text" placeholder="Etiqueta (ej: Locro 2027)" class="w-full bg-gray-900 border border-gray-600 rounded-md px-2 py-1 text-sm" />
+          <input v-model="newYear.label" type="text" placeholder="Etiqueta (ej: Locro 2027)" class="w-full bg-surface border border-border-soft rounded-md px-2 py-1 text-sm" />
           <div class="flex justify-end">
             <PrimaryButton @click="createYear">Crear edición</PrimaryButton>
           </div>
@@ -209,7 +209,7 @@ function createYear() {
             v-for="y in years"
             :key="y.id"
             class="flex items-center justify-between px-3 py-2 rounded-md text-sm cursor-pointer"
-            :class="selectedYearId === y.id ? 'bg-blue-900/50' : 'hover:bg-gray-800'"
+            :class="selectedYearId === y.id ? 'bg-surface-3' : 'hover:bg-surface-3/60'"
             @click="selectedYearId = y.id"
           >
             <span>
@@ -229,33 +229,33 @@ function createYear() {
       </div>
 
       <!-- Edicion de parametros -->
-      <div v-if="selectedYear" class="bg-gray-900 text-white rounded-lg p-6 space-y-4">
+      <div v-if="selectedYear" class="bg-surface border border-border text-white rounded-lg p-5 space-y-4">
         <h3 class="text-sm text-gray-400">Editando: {{ selectedYear.year }}</h3>
 
         <div>
           <label class="text-sm text-gray-400 block mb-1">Etiqueta</label>
-          <input v-model="form.label" type="text" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+          <input v-model="form.label" type="text" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="text-sm text-gray-400 block mb-1">Precio normal por porción</label>
-            <input v-model.number="form.portion_price" type="number" min="0" step="0.01" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+            <input v-model.number="form.portion_price" type="number" min="0" step="0.01" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="text-sm text-gray-400 block mb-1">Porciones elaboradas</label>
-            <input v-model.number="form.made_portions" type="number" min="0" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+            <input v-model.number="form.made_portions" type="number" min="0" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
           </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="text-sm text-gray-400 block mb-1">Fecha de venta</label>
-            <input v-model="form.sale_date" type="date" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+            <input v-model="form.sale_date" type="date" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
           </div>
         </div>
 
-        <div class="border-t border-gray-700 pt-4">
+        <div class="border-t border-border pt-4">
           <label class="flex items-center gap-2 text-sm mb-3">
             <input v-model="promoEnabled" type="checkbox" />
             Activar promoción por cantidad
@@ -264,11 +264,11 @@ function createYear() {
           <div v-if="promoEnabled" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="text-sm text-gray-400 block mb-1">Porciones mínimas para promo</label>
-              <input v-model.number="form.amount_for_promo" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+              <input v-model.number="form.amount_for_promo" type="number" min="1" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="text-sm text-gray-400 block mb-1">Precio promocional por porción</label>
-              <input v-model.number="form.promo_unit_price" type="number" min="0" step="0.01" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+              <input v-model.number="form.promo_unit_price" type="number" min="0" step="0.01" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
             </div>
           </div>
           <p v-if="promoEnabled" class="text-xs text-gray-500 mt-2">
@@ -276,7 +276,7 @@ function createYear() {
           </p>
         </div>
 
-        <div class="border-t border-gray-700 pt-4">
+        <div class="border-t border-border pt-4">
           <h4 class="text-sm text-gray-400 mb-2">Configuración de salsas</h4>
           <p class="text-xs text-gray-500 mb-3">
             Definí la relación "X salsas cada Y porciones" para esta edición. La regla anterior
@@ -285,11 +285,11 @@ function createYear() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="text-sm text-gray-400 block mb-1">Salsas por bloque</label>
-              <input v-model.number="form.sauce_units_per_block" type="number" min="0" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+              <input v-model.number="form.sauce_units_per_block" type="number" min="0" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="text-sm text-gray-400 block mb-1">Porciones por bloque</label>
-              <input v-model.number="form.sauce_portions_per_block" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" />
+              <input v-model.number="form.sauce_portions_per_block" type="number" min="1" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" />
             </div>
           </div>
           <p class="text-xs text-gray-500 mt-2">
@@ -298,10 +298,10 @@ function createYear() {
             a completarlo.
           </p>
 
-          <div class="bg-gray-800 rounded-md p-4 mt-3">
+          <div class="bg-surface-3 rounded-md p-4 mt-3">
             <h5 class="text-xs text-gray-400 mb-2">Vista previa de salsas (con los valores de arriba, sin guardar)</h5>
             <div class="grid grid-cols-3 sm:grid-cols-4 gap-2 text-sm">
-              <div v-for="row in saucePreviewRows" :key="row.portions" class="flex justify-between bg-gray-900 rounded px-2 py-1">
+              <div v-for="row in saucePreviewRows" :key="row.portions" class="flex justify-between bg-surface rounded px-2 py-1">
                 <span class="text-gray-400">{{ row.portions }} porc.</span>
                 <span class="font-medium">{{ row.sauces }}</span>
               </div>
@@ -309,7 +309,7 @@ function createYear() {
           </div>
         </div>
 
-        <div class="border-t border-gray-700 pt-4">
+        <div class="border-t border-border pt-4">
           <h4 class="text-sm text-gray-400 mb-2">Metas de venta (Fase 6A)</h4>
           <p class="text-xs text-gray-500 mb-3">
             Opcionales. Si se dejan vacías, el Dashboard no muestra barra de progreso para esa meta.
@@ -317,17 +317,17 @@ function createYear() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="text-sm text-gray-400 block mb-1">Meta global de porciones</label>
-              <input v-model.number="form.sales_goal_global" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Ej: 1500" />
+              <input v-model.number="form.sales_goal_global" type="number" min="1" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" placeholder="Ej: 1500" />
             </div>
             <div>
               <label class="text-sm text-gray-400 block mb-1">Meta de ventas por Rover</label>
-              <input v-model.number="form.sales_goal_individual_default" type="number" min="1" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Ej: 70" />
+              <input v-model.number="form.sales_goal_individual_default" type="number" min="1" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm" placeholder="Ej: 70" />
             </div>
           </div>
         </div>
 
         <!-- Preview en vivo -->
-        <div class="bg-gray-800 rounded-md p-4">
+        <div class="bg-surface-3 rounded-md p-4">
           <h4 class="text-xs text-gray-400 mb-2">Vista previa (con los valores de arriba, sin guardar)</h4>
           <div class="space-y-1 text-sm">
             <div v-for="row in previewRows" :key="row.portions" class="flex justify-between">
@@ -342,7 +342,7 @@ function createYear() {
 
         <div>
           <label class="text-sm text-gray-400 block mb-1">Notas</label>
-          <textarea v-model="form.notes" rows="2" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm"></textarea>
+          <textarea v-model="form.notes" rows="2" class="w-full bg-surface-3 border border-border-soft rounded-md px-3 py-2 text-sm"></textarea>
         </div>
 
         <p class="text-xs text-gray-500">

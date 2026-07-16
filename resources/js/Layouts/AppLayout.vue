@@ -61,7 +61,9 @@ const navGroups = computed(() => {
         },
         {
             id: 'organizacion',
-            label: 'Organización',
+            // Fase 18.1: solo cambia el texto visible del menu (a pedido del
+            // usuario); id, rutas y estructura interna quedan iguales.
+            label: 'Documentación',
             icon: 'building',
             items: [
                 can('actas.ver') && { label: 'Actas', href: route('meetings.index'), active: route().current('meetings.*') },

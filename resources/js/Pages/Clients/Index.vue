@@ -505,7 +505,16 @@ function exportUrl() {
                 <div class="flex flex-wrap gap-2">
                   <Link :href="`/clients/${client.id}/history`" class="text-blue-400 hover:text-blue-300 text-xs">Historial</Link>
                   <a :href="`/orders/create?client_id=${client.id}&year_id=${year.id}`" class="text-blue-400 hover:text-blue-300 text-xs">Crear pedido</a>
-                  <button v-if="can('clientes.editar')" type="button" class="text-gray-300 hover:text-white text-xs" @click="openEdit(client)">Editar</button>
+                  <!-- Fase 18.1: un Rover comun (sin 'asignaciones.transferir')
+                       solo puede editar los clientes donde el es el
+                       responsable asignado en la edicion activa (ver
+                       ClientPolicy::update). -->
+                  <button
+                    v-if="can('clientes.editar') && (canTransfer || client.year_assignment?.assigned_user_id === page.props.auth.user.id)"
+                    type="button"
+                    class="text-gray-300 hover:text-white text-xs"
+                    @click="openEdit(client)"
+                  >Editar</button>
                   <button v-if="canTransfer" type="button" class="text-yellow-400 hover:text-yellow-300 text-xs" @click="removeFromYear(client)">Quitar de la edición</button>
                   <button v-if="can('clientes.eliminar')" type="button" class="text-red-400 hover:text-red-300 text-xs" @click="destroyOne(client)">Eliminar</button>
                 </div>

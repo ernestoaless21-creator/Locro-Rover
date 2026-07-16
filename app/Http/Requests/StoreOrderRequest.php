@@ -61,6 +61,13 @@ class StoreOrderRequest extends FormRequest
             'advanced_items.*.quantity' => ['required', 'integer', 'min:1'],
             'advanced_items.*.description' => ['nullable', 'string', 'max:255'],
             'advanced_items.*.custom_unit_price' => ['nullable', 'numeric', 'min:0'],
+
+            // Fase 18.1: registrar el pago (uno o varios medios) en el mismo
+            // alta del pedido. Opcional: un pedido puede crearse sin pagos,
+            // igual que hoy. Mismo shape que BulkPayOrdersRequest 'lines'.
+            'payment_lines' => ['nullable', 'array'],
+            'payment_lines.*.payment_method_id' => ['required_with:payment_lines', 'integer', 'exists:payment_methods,id'],
+            'payment_lines.*.amount' => ['required_with:payment_lines', 'numeric', 'min:0.01'],
         ];
     }
 

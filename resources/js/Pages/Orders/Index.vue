@@ -282,6 +282,17 @@ function rankBadge(index) {
   return rankIcons[index] ?? `${index + 1}º`
 }
 
+// Fase 18.1: con muchos Rovers (20+) una sola columna se vuelve demasiado
+// larga arriba de la tabla, que es lo importante de esta pantalla. En vez de
+// partir en dos columnas (mas ancho, mas dificil de leer en orden), se
+// muestra el Top 10 y se revela el resto con un boton, mismo patron de
+// "revelar mas" que ya usan Filtros/Opciones avanzadas en esta pantalla.
+const showFullRanking = ref(false)
+const visibleRanking = computed(() => {
+  if (!props.roverRanking) return []
+  return showFullRanking.value ? props.roverRanking : props.roverRanking.slice(0, 10)
+})
+
 // Fase 8 (correccion): filtros de retiro clickeables mutuamente excluyentes.
 // Se usan nombres distintos de toggleWithdrawn (que ya existe para el checkbox
 // de fila individual) para evitar colision de nombres.
@@ -325,7 +336,7 @@ function sauces(order) {
 
   <AppLayout title="Pedidos">
     <template #header>
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3">
         <h2 class="font-semibold text-xl text-white leading-tight">Pedidos — Edicion {{ year.year }}</h2>
         <Link
           v-if="can('pedidos.crear')"
@@ -435,7 +446,7 @@ function sauces(order) {
           <p class="text-sm font-semibold text-gray-300 mb-1.5">📊 Ventas por Rover</p>
           <div class="space-y-1 max-w-md">
             <div
-              v-for="(entry, index) in roverRanking"
+              v-for="(entry, index) in visibleRanking"
               :key="entry.rover_id"
               class="flex items-center gap-2 text-xs"
             >
@@ -456,6 +467,14 @@ function sauces(order) {
               <span class="shrink-0 text-white font-semibold w-8 text-left">{{ entry.total_portions }}</span>
             </div>
           </div>
+          <button
+            v-if="roverRanking.length > 10"
+            type="button"
+            class="text-xs text-ember hover:text-ember-strong mt-1.5"
+            @click="showFullRanking = !showFullRanking"
+          >
+            {{ showFullRanking ? 'Ver menos' : `Ver ranking completo (${roverRanking.length})` }}
+          </button>
         </div>
 
         <div class="flex flex-wrap gap-2 items-center">
@@ -655,7 +674,15 @@ function sauces(order) {
                 </div>
               </td>
               <td class="p-2">{{ money(order.total_amount) }}</td>
-              <td class="p-2">{{ money(order.balance_due) }}</td>
+              <td class="p-2">
+                <!-- Fase 18.1: sobrepago (saldo negativo) deja de mostrarse
+                     como un numero negativo silencioso, pasa a un estado
+                     explicito en rojo. -->
+                <span v-if="Number(order.balance_due) < 0" class="text-red-400 font-semibold">
+                  Sobrepago: devolver {{ money(Math.abs(order.balance_due)) }}
+                </span>
+                <span v-else>{{ money(order.balance_due) }}</span>
+              </td>
               <td class="p-2">
                 <span class="px-2 py-0.5 rounded-full text-xs" :class="paymentStatus(order).cls">
                   {{ paymentStatus(order).label }}
@@ -699,9 +726,18 @@ function sauces(order) {
                 </p>
               </td>
               <td class="p-2">
-                <Link :href="`/orders/${order.id}/edit`" class="text-blue-400 hover:text-blue-300">
+                <!-- Fase 18.1: un Rover comun (sin 'pedidos.asignar-rover')
+                     solo puede editar SUS propios pedidos (ver
+                     OrderPolicy::update); se oculta el link para los ajenos
+                     en vez de dejar que llegue a un 403. -->
+                <Link
+                  v-if="canAssignRover || order.rover_id === page.props.auth.user.id"
+                  :href="`/orders/${order.id}/edit`"
+                  class="text-blue-400 hover:text-blue-300"
+                >
                   Editar
                 </Link>
+                <span v-else class="text-gray-600 text-xs">—</span>
               </td>
             </tr>
             <tr v-if="!orders.data.length">

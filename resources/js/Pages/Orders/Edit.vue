@@ -38,6 +38,10 @@ const props = defineProps({
   canWithdraw: { type: Boolean, default: false },
   canDelete: { type: Boolean, default: false },
   canExceptionalPrice: { type: Boolean, default: false },
+  // Fase 18.1: sin este permiso, el select de edicion queda de solo lectura
+  // (ver OrderController::update, que ademas ignora cualquier year_id que
+  // llegue en el payload si el usuario no tiene el permiso).
+  canChooseYear: { type: Boolean, default: false },
   authUserId: { type: Number, default: null },
 })
 
@@ -152,7 +156,7 @@ function saveGeneral() {
       preserveScroll: true,
       onSuccess: () => {
         toast.success('Datos generales guardados.')
-        router.reload({ only: ['order'] })
+        router.visit('/orders')
       },
       onError: () => toast.error('No se pudo guardar. Revisa los permisos o los datos.'),
       onFinish: () => { savingGeneral.value = false },
@@ -322,7 +326,12 @@ async function confirmDeleteOrder() {
           </div>
           <div class="flex justify-between">
             <span class="text-gray-400">Saldo</span>
-            <span>{{ money(order.balance_due) }}</span>
+            <!-- Fase 18.1: sobrepago (saldo negativo) explicito en rojo, en
+                 vez de un numero negativo silencioso. -->
+            <span v-if="Number(order.balance_due) < 0" class="text-red-400 font-semibold">
+              Sobrepago: devolver {{ money(Math.abs(order.balance_due)) }}
+            </span>
+            <span v-else>{{ money(order.balance_due) }}</span>
           </div>
         </div>
       </div>
@@ -338,11 +347,15 @@ async function confirmDeleteOrder() {
         <h3 class="text-sm text-gray-400">Datos generales</h3>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
+          <div v-if="canChooseYear">
             <label class="text-sm text-gray-400 block mb-1">Edicion / Año</label>
             <select v-model="yearId" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm">
               <option v-for="y in years" :key="y.id" :value="y.id">{{ y.year }}</option>
             </select>
+          </div>
+          <div v-else>
+            <label class="text-sm text-gray-400 block mb-1">Edicion / Año</label>
+            <p class="text-sm pt-2">{{ years.find((y) => y.id === yearId)?.year ?? '—' }}</p>
           </div>
           <div v-if="canAssignRover">
             <label class="text-sm text-gray-400 block mb-1">Rover responsable</label>

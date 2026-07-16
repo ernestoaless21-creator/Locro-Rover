@@ -301,6 +301,12 @@ class OrderController extends Controller
                 : [],
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canExceptionalPrice' => $user->can('pedidos.precio-excepcional'),
+            // Fase 18.1: un usuario comun siempre crea en la edicion activa,
+            // sin poder elegirla (ver store(), que la fuerza igual del lado
+            // servidor). Solo quien administra ediciones puede elegir otra.
+            'canChooseYear' => $user->can('anios.gestionar'),
+            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'canRegisterPayment' => $user->can('pagos.registrar'),
             // Fase 6A: permite pre-cargar cliente/edicion cuando se llega desde
             // "Crear pedido" en la pantalla de Asignaciones (?client_id=&year_id=).
             'preselectedClient' => $request->filled('client_id')
@@ -321,7 +327,16 @@ class OrderController extends Controller
     public function store(StoreOrderRequest $request, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
     {
         $data = $request->validated();
-        $year = Year::findOrFail($data['year_id']);
+
+        // Fase 18.1: un usuario sin 'anios.gestionar' siempre crea en la
+        // edicion activa, sin importar que year_id haya mandado el frontend
+        // (que ademas ya no deberia mostrarle un selector, ver
+        // Orders/New.vue). Se fuerza aca tambien del lado servidor: nunca se
+        // confia unicamente en que el frontend oculto el campo.
+        $year = $request->user()->can('anios.gestionar')
+            ? Year::findOrFail($data['year_id'])
+            : Year::where('is_active', true)->firstOrFail();
+        $data['year_id'] = $year->id;
 
         // Fase 6A: un pedido nuevo nace "sin responsable" hasta que se le
         // asigna uno. Si no se manda rover_id (o se manda el propio), es una
@@ -377,10 +392,27 @@ class OrderController extends Controller
             // usuario (ver ClientAssignmentService::syncFromOrder).
             $assignments->syncFromOrder($order);
 
+            // Fase 18.1: registrar el pago (uno o varios medios) en el mismo
+            // paso de alta, para no obligar a crear el pedido y despues abrir
+            // aparte la ventana de pagos. Mismo shape {payment_method_id,
+            // amount} que ya usa OrderBulkController::pay en modo
+            // 'fixed_lines'; se re-chequea el permiso real por si el
+            // formulario llego a mostrarse indebidamente.
+            if (! empty($data['payment_lines']) && Gate::allows('registerPayment', $order)) {
+                foreach ($data['payment_lines'] as $line) {
+                    $order->payments()->create([
+                        'payment_method_id' => $line['payment_method_id'],
+                        'amount' => $line['amount'],
+                        'paid_at' => now(),
+                        'registered_by' => $request->user()->id,
+                    ]);
+                }
+            }
+
             return $order;
         });
 
-        return redirect()->route('orders.edit', $order)->with('success', "Pedido #{$order->id} creado. Ya podes agregar mas lineas o registrar pagos.");
+        return redirect()->route('orders.index')->with('success', "Pedido #{$order->id} creado.");
     }
 
     /**
@@ -407,6 +439,8 @@ class OrderController extends Controller
             'canWithdraw' => $user->can('pedidos.retirar'),
             'canDelete' => $user->can('pedidos.eliminar'),
             'canExceptionalPrice' => $user->can('pedidos.precio-excepcional'),
+            // Fase 18.1: mismo criterio que create(), ver docblock de store().
+            'canChooseYear' => $user->can('anios.gestionar'),
             'authUserId' => $user->id,
         ]);
     }
@@ -459,6 +493,15 @@ class OrderController extends Controller
     public function update(UpdateOrderRequest $request, Order $order, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
     {
         $data = $request->validated();
+
+        // Fase 18.1: cambiar la edicion de un pedido ya creado es la misma
+        // accion administrativa que elegirla al crearlo (ver store()): sin
+        // 'anios.gestionar', se ignora silenciosamente cualquier year_id
+        // distinto que llegue en el payload (el frontend ya no deberia
+        // mostrar ese selector como editable para estos usuarios).
+        if (array_key_exists('year_id', $data) && ! $request->user()->can('anios.gestionar')) {
+            unset($data['year_id']);
+        }
 
         // Fase 6A: si el payload trae rover_id y difiere del actual, se
         // re-chequea explicitamente contra la regla de autoasignacion vs

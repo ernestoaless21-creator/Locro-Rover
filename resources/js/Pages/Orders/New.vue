@@ -28,6 +28,12 @@ const props = defineProps({
   rovers: { type: Array, default: () => [] },
   canAssignRover: { type: Boolean, default: false },
   canExceptionalPrice: { type: Boolean, default: false },
+  // Fase 18.1: sin este permiso, el pedido SIEMPRE se crea en la edicion
+  // activa (ver OrderController::store, que ademas lo fuerza del lado
+  // servidor sin importar lo que llegue en el payload).
+  canChooseYear: { type: Boolean, default: false },
+  paymentMethods: { type: Array, default: () => [] },
+  canRegisterPayment: { type: Boolean, default: false },
   preselectedClient: { type: Object, default: null },
   preselectedYearId: { type: Number, default: null },
 })
@@ -45,6 +51,24 @@ const advancedItems = ref([])
 const showAdvanced = ref(false)
 const saving = ref(false)
 const showConfirm = ref(false)
+
+// Fase 18.1: registrar el pago (uno o varios medios) en el mismo alta del
+// pedido, mismo shape {payment_method_id, amount} que ya usa PayOrderModal.
+// Arranca sin lineas: es opcional, un pedido puede crearse sin pagos.
+const paymentLines = ref([])
+function addPaymentLine() {
+  paymentLines.value.push({ payment_method_id: props.paymentMethods[0]?.id ?? null, amount: null })
+}
+function removePaymentLine(index) {
+  paymentLines.value.splice(index, 1)
+}
+const paymentTotal = computed(() =>
+  paymentLines.value.reduce((sum, l) => sum + (Number(l.amount) || 0), 0)
+)
+// El total del pedido todavia no existe en el servidor (se crea recien al
+// guardar), asi que la comparacion usa el preview en vivo (misma fuente que
+// ya muestra el resumen de precio de arriba).
+const paymentOverpay = computed(() => paymentTotal.value - total.value)
 
 // Fase 18 (microinteracciones): retorno de foco al boton que abrio el modal
 // de confirmacion, al cerrarlo.
@@ -172,6 +196,9 @@ function confirmSave() {
         description: i.description,
         custom_unit_price: i.custom_unit_price,
       })),
+      payment_lines: paymentLines.value
+        .filter((l) => l.payment_method_id && l.amount > 0)
+        .map((l) => ({ payment_method_id: l.payment_method_id, amount: l.amount })),
     },
     {
       onSuccess: () => toast.success('Pedido creado.'),
@@ -242,8 +269,8 @@ function confirmSave() {
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+        <div v-if="canChooseYear || canAssignRover" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div v-if="canChooseYear">
             <label class="text-sm text-gray-400 block mb-1">Edicion / Año</label>
             <select v-model="yearId" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm">
               <option v-for="y in years" :key="y.id" :value="y.id">{{ y.year }} {{ y.is_active ? '(activo)' : '' }}</option>
@@ -324,6 +351,40 @@ function confirmSave() {
               <OrderLineForm v-if="yearId" :year-id="yearId" @submit="addAdvancedItem" />
             </div>
           </div>
+        </div>
+
+        <!-- Fase 18.1: registrar el pago (opcional) en el mismo alta, para no
+             tener que crear el pedido y despues abrir aparte la ventana de
+             pagos. Una sola interfaz: uno o varios medios de pago con su
+             monto, igual que Registrar pago (ver PayOrderModal.vue). -->
+        <div v-if="canRegisterPayment" class="border-t border-gray-700 pt-4">
+          <h4 class="text-sm text-gray-400 mb-2">Registrar pago (opcional)</h4>
+
+          <div v-if="paymentLines.length" class="space-y-2 mb-2">
+            <div v-for="(line, index) in paymentLines" :key="index" class="flex gap-2 items-center">
+              <select v-model="line.payment_method_id" class="flex-1 bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm">
+                <option v-for="m in paymentMethods" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+              <input
+                v-model.number="line.amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="Monto"
+                class="flex-1 bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm"
+              />
+              <button type="button" class="text-red-400 hover:text-red-300 text-xs" @click="removePaymentLine(index)">
+                Quitar
+              </button>
+            </div>
+          </div>
+          <button type="button" class="text-sm text-ember hover:text-ember-strong" @click="addPaymentLine">
+            + Agregar medio de pago
+          </button>
+
+          <p v-if="paymentOverpay > 0" class="text-sm text-red-400 font-semibold mt-2">
+            Sobrepago: debe devolver {{ money(paymentOverpay) }}
+          </p>
         </div>
 
         <div class="flex justify-end">
