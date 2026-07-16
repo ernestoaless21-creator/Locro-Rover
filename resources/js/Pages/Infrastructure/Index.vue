@@ -243,10 +243,10 @@ function saveReturnDate(loan) {
   <AppLayout :title="`Inventario de infraestructura — Edición ${year.year}`">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('teams.show', team)" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('teams.show', team)" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Infraestructura
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Inventario de infraestructura</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Inventario de infraestructura</h2>
       </div>
     </template>
 
@@ -354,9 +354,10 @@ function saveReturnDate(loan) {
             </tbody>
           </table>
 
-          <p v-if="inventoryRows.length === 0" class="text-center text-gray-400 py-10 text-sm">
-            No hay elementos en el inventario de esta edición.
-          </p>
+          <div v-if="inventoryRows.length === 0" class="text-center text-gray-400 py-10 text-sm">
+            <p class="text-2xl mb-1">🧰</p>
+            <p>Todavía no hay elementos en el inventario de esta edición.</p>
+          </div>
         </div>
 
         <!-- Agregar elemento -->
@@ -426,7 +427,7 @@ function saveReturnDate(loan) {
 
             <div class="flex gap-2 pt-1">
               <button type="button" :disabled="newRowForm.processing" @click="submitNewRow"
-                class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
                 Agregar
               </button>
               <button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="showNewRow = false">
@@ -532,7 +533,7 @@ function saveReturnDate(loan) {
                     class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
                 </div>
                 <div class="flex gap-2">
-                  <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700" @click="saveEditLoan(loan)">
+                  <button type="button" class="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500" @click="saveEditLoan(loan)">
                     Guardar
                   </button>
                   <button type="button" class="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900" @click="cancelEditLoan">
@@ -543,9 +544,16 @@ function saveReturnDate(loan) {
             </template>
           </div>
 
-          <p v-if="filteredLoans.length === 0" class="text-center text-gray-400 py-10 text-sm">
-            {{ loans.length === 0 ? 'No hay préstamos registrados para esta edición.' : 'No se encontraron préstamos.' }}
-          </p>
+          <div v-if="filteredLoans.length === 0" class="text-center text-gray-400 py-10 text-sm">
+            <template v-if="loans.length === 0">
+              <p class="text-2xl mb-1">🤝</p>
+              <p>Todavía no hay préstamos registrados para esta edición.</p>
+            </template>
+            <template v-else>
+              <p class="text-2xl mb-1">🔎</p>
+              <p>No se encontraron préstamos con ese filtro o búsqueda.</p>
+            </template>
+          </div>
         </div>
 
         <!-- Registrar préstamo -->
@@ -587,7 +595,7 @@ function saveReturnDate(loan) {
             </div>
             <div class="flex gap-2 pt-1">
               <button type="button" :disabled="newLoanForm.processing" @click="submitNewLoan"
-                class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
                 Registrar
               </button>
               <button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="showNewLoan = false">
@@ -626,7 +634,7 @@ function saveReturnDate(loan) {
               Cancelar
             </button>
             <button type="button" :disabled="editItemForm.processing || !editItemForm.name.trim()"
-              class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50"
               @click="submitEditItem">
               Guardar
             </button>

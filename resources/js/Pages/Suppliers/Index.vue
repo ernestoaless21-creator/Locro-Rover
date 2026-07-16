@@ -68,10 +68,10 @@ function toggleActive(s) {
   <AppLayout title="Proveedores">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('teams.show', team)" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('teams.show', team)" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Compras
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Proveedores</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Proveedores</h2>
       </div>
     </template>
 
@@ -107,7 +107,7 @@ function toggleActive(s) {
             <textarea v-model="newForm.notes" rows="2" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div class="flex gap-2">
-            <button type="submit" :disabled="newForm.processing" class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+            <button type="submit" :disabled="newForm.processing" class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
               Crear
             </button>
             <button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="showNewForm = false; newForm.reset()">
@@ -171,7 +171,7 @@ function toggleActive(s) {
                 <textarea v-model="editForm.notes" rows="2" class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
               </div>
               <div class="flex gap-2">
-                <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700" @click="saveEdit(s)">
+                <button type="button" class="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500" @click="saveEdit(s)">
                   Guardar
                 </button>
                 <button type="button" class="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900" @click="cancelEdit">
@@ -183,7 +183,10 @@ function toggleActive(s) {
         </div>
       </div>
 
-      <p v-else class="text-center text-gray-400 py-12 text-sm">No hay proveedores registrados todavía.</p>
+      <div v-else class="text-center text-gray-400 py-12 text-sm">
+        <p class="text-2xl mb-1">🚚</p>
+        <p>Todavía no hay proveedores registrados.</p>
+      </div>
     </div>
   </AppLayout>
 </template>

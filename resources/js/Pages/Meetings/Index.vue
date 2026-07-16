@@ -42,11 +42,11 @@ const shortDate = (dateStr) =>
     <AppLayout title="Actas">
         <template #header>
             <div class="flex items-center justify-between">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Actas y reuniones</h2>
+                <h2 class="font-semibold text-xl text-white leading-tight">Actas y reuniones</h2>
                 <div class="flex items-center gap-3">
                     <select
                         v-model="selectedYearId"
-                        class="border-gray-300 rounded-md text-sm shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                        class="bg-surface border border-border-soft text-white rounded-md text-sm shadow-sm focus:ring-2 focus:ring-ember focus:border-ember"
                         @change="changeYear"
                     >
                         <option v-for="y in years" :key="y.id" :value="y.id">{{ y.label }}</option>
@@ -54,7 +54,7 @@ const shortDate = (dateStr) =>
                     <Link
                         v-if="canManage"
                         :href="route('meetings.create', { year_id: year.id })"
-                        class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition"
+                        class="inline-flex items-center px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-md hover:bg-red-600 transition"
                     >
                         + Nueva acta
                     </Link>
@@ -66,7 +66,8 @@ const shortDate = (dateStr) =>
             <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 <div v-if="meetings.length === 0" class="text-center py-16 text-gray-500">
-                    No hay actas registradas para {{ year.label }}.
+                    <p class="text-2xl mb-1">📋</p>
+                    <p>Todavía no hay actas registradas para {{ year.label }}.</p>
                 </div>
 
                 <div v-else class="space-y-8">

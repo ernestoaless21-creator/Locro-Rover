@@ -55,7 +55,7 @@ function toggleActive(user) {
 
   <AppLayout title="Usuarios">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">Usuarios</h2>
+      <h2 class="font-semibold text-xl text-white leading-tight">Usuarios</h2>
     </template>
 
     <div class="py-8 max-w-5xl mx-auto px-4">
@@ -107,7 +107,7 @@ function toggleActive(user) {
                 <button
                   type="button"
                   class="px-3 py-1 rounded-md text-xs"
-                  :class="user.is_active ? 'bg-red-800 hover:bg-red-700' : 'bg-green-700 hover:bg-green-600'"
+                  :class="user.is_active ? 'bg-red-900 hover:bg-red-800' : 'bg-green-600 hover:bg-green-500'"
                   :disabled="savingId === user.id"
                   @click="toggleActive(user)"
                 >
@@ -116,7 +116,10 @@ function toggleActive(user) {
               </td>
             </tr>
             <tr v-if="!users.length">
-              <td colspan="6" class="p-6 text-center text-gray-500">No hay usuarios registrados.</td>
+              <td colspan="6" class="p-8 text-center text-gray-500">
+                <p class="text-2xl mb-1">🙋</p>
+                <p class="text-gray-300 font-medium">Todavía no hay usuarios registrados.</p>
+              </td>
             </tr>
           </tbody>
         </table>

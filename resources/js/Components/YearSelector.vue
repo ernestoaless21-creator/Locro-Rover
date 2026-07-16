@@ -39,7 +39,7 @@ function selectYear(yearId) {
       type="button"
       class="px-3 py-1 rounded-md text-sm font-medium transition-colors"
       :class="[
-        y.id === activeSelection ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700',
+        y.id === activeSelection ? 'bg-surface-3 text-white' : 'bg-surface text-gray-300 hover:bg-gray-700',
         y.is_active ? 'ring-1 ring-green-500' : '',
       ]"
       :title="y.is_active ? 'Edicion activa' : ''"

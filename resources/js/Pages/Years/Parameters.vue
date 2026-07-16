@@ -174,10 +174,10 @@ function createYear() {
 
   <AppLayout title="Parámetros">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">Parámetros de precios y ediciones</h2>
+      <h2 class="font-semibold text-xl text-white leading-tight">Parámetros de precios y ediciones</h2>
     </template>
 
-    <div class="py-8 max-w-3xl mx-auto px-4 space-y-6">
+    <div class="py-4 max-w-3xl mx-auto px-4 space-y-6">
       <!-- Listado de ediciones -->
       <div class="bg-gray-900 text-white rounded-lg p-6">
         <div class="flex justify-between items-center mb-3">
@@ -372,7 +372,7 @@ function createYear() {
         <div class="flex flex-col gap-2">
           <button
             type="button"
-            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-500"
+            class="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-500"
             @click="confirmSave(true)"
           >
             Guardar y recalcular pedidos

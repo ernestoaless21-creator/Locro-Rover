@@ -34,6 +34,11 @@ const assignedUserId = ref(props.filters.assigned_user_id || '')
 const contactStatus = ref(props.filters.contact_status || '')
 const unassignedOnly = ref(!!props.filters.unassigned_only)
 
+// Fase 18: filtros avanzados (Responsable/Estado/Solo sin asignar) agrupados
+// detras de un boton "Filtros". La busqueda principal queda siempre visible.
+const showFilters = ref(Boolean(assignedUserId.value || contactStatus.value || unassignedOnly.value))
+const activeFilterCount = computed(() => [assignedUserId.value, contactStatus.value, unassignedOnly.value].filter(Boolean).length)
+
 const selected = ref([])
 const bulkTargetUser = ref('')
 const distributeUsers = ref([])
@@ -192,18 +197,38 @@ function exportUrl() {
   <AppLayout title="Asignaciones">
     <template #header>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Asignaciones / Call center</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Asignaciones / Call center</h2>
         <YearSelector :selected-year-id="year.id" />
       </div>
     </template>
 
     <div class="py-6 max-w-7xl mx-auto px-4 space-y-4">
-      <!-- Filtros -->
+      <!-- Busqueda principal (siempre visible) + filtros avanzados colapsables -->
       <div class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap gap-3 items-end">
         <div>
           <label class="text-xs text-gray-400 block mb-1">Buscar (nombre, teléfono, N° histórico)</label>
           <input v-model="search" @keyup.enter="applyFilters" type="text" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-sm" />
         </div>
+        <button type="button" @click="applyFilters" class="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-md text-sm">Filtrar</button>
+
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-md text-sm border transition-colors flex items-center gap-1.5"
+          :class="showFilters ? 'bg-gray-700 border-gray-500' : 'bg-gray-800 border-gray-600 hover:bg-gray-700'"
+          @click="showFilters = !showFilters"
+        >
+          <span>🔎 Filtros</span>
+          <span v-if="activeFilterCount > 0" class="bg-blue-600 text-white text-[10px] leading-none rounded-full px-1.5 py-1">{{ activeFilterCount }}</span>
+          <span class="text-[10px]">{{ showFilters ? '▲' : '▼' }}</span>
+        </button>
+
+        <a :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm ml-auto">Exportar Excel</a>
+        <button v-if="canGenerate" type="button" @click="openGenerateModal" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-md text-sm">
+          Generar desde edición anterior
+        </button>
+      </div>
+
+      <div v-if="showFilters" class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap gap-3 items-end">
         <div>
           <label class="text-xs text-gray-400 block mb-1">Responsable</label>
           <select v-model="assignedUserId" @change="applyFilters" class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-sm">
@@ -222,11 +247,6 @@ function exportUrl() {
           <input type="checkbox" v-model="unassignedOnly" @change="applyFilters" />
           Solo sin asignar
         </label>
-        <button type="button" @click="applyFilters" class="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-md text-sm">Filtrar</button>
-        <a :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm ml-auto">Exportar Excel</a>
-        <button v-if="canGenerate" type="button" @click="openGenerateModal" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-md text-sm">
-          Generar desde edición anterior
-        </button>
       </div>
 
       <!-- Acciones masivas -->
@@ -321,7 +341,10 @@ function exportUrl() {
               </td>
             </tr>
             <tr v-if="!assignments.data.length">
-              <td :colspan="canBulk ? 9 : 8" class="p-6 text-center text-gray-500">No hay asignaciones para esta edición con estos filtros.</td>
+              <td :colspan="canBulk ? 9 : 8" class="p-8 text-center text-gray-500">
+                <p class="text-2xl mb-1">🔎</p>
+                <p>No hay asignaciones para esta edición con estos filtros.</p>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -367,7 +390,7 @@ function exportUrl() {
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" @click="showGenerateModal = false" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm">Cancelar</button>
-          <button type="button" :disabled="generateBusy || !generatePreview" @click="confirmGenerate" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-md text-sm disabled:opacity-50">
+          <button type="button" :disabled="generateBusy || !generatePreview" @click="confirmGenerate" class="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded-md text-sm disabled:opacity-50">
             Confirmar y generar
           </button>
         </div>

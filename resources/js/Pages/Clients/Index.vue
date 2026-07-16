@@ -41,6 +41,10 @@ const page = usePage()
 const can = (perm) => (page.props.permissions ?? []).includes(perm)
 const toast = useToast()
 
+// Fase 18: estado vacio contextual (distingue "sin resultados de busqueda/filtro"
+// de "todavia no hay clientes cargados").
+const isFiltering = computed(() => Boolean(props.filters.search || props.filters.my_assigned_clients))
+
 const search = ref(props.filters.search ?? '')
 const suggestions = ref([])
 const showSuggestions = ref(false)
@@ -305,11 +309,11 @@ function exportUrl() {
   <AppLayout title="Clientes">
     <template #header>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Clientes — Edición {{ year.year }}</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Clientes — Edición {{ year.year }}</h2>
         <button
           v-if="can('clientes.crear')"
           type="button"
-          class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm"
+          class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold"
           @click="openCreate"
         >
           + Nuevo cliente
@@ -378,7 +382,7 @@ function exportUrl() {
           v-if="selected.size > 0 && can('clientes.eliminar')"
           type="button"
           :disabled="deleting"
-          class="bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 px-4 py-2 rounded-md text-sm"
+          class="bg-red-900 hover:bg-red-800 text-white disabled:opacity-50 px-4 py-2 rounded-md text-sm"
           @click="bulkDelete"
         >
           Eliminar seleccionados ({{ selected.size }})
@@ -508,11 +512,20 @@ function exportUrl() {
               </td>
             </tr>
             <tr v-if="!clients.data.length">
-              <td :colspan="canBulk ? 10 : 9" class="p-6 text-center text-gray-500">
-                Sin resultados.
-                <button v-if="can('clientes.crear')" type="button" class="text-blue-400 block mt-1 mx-auto" @click="openCreate">
-                  Crear el primer cliente
-                </button>
+              <td :colspan="canBulk ? 10 : 9" class="p-8 text-center text-gray-500">
+                <template v-if="isFiltering">
+                  <p class="text-2xl mb-1">🔎</p>
+                  <p>No se encontraron clientes con esa búsqueda o filtro.</p>
+                  <p class="text-xs text-gray-500 mt-1">Probá con otro nombre, apellido o teléfono.</p>
+                </template>
+                <template v-else>
+                  <p class="text-2xl mb-1">👥</p>
+                  <p class="text-gray-300 font-medium">Todavía no hay clientes cargados.</p>
+                  <p class="text-xs mt-1">Sumá el primero para arrancar.</p>
+                  <button v-if="can('clientes.crear')" type="button" class="text-blue-400 block mt-2 mx-auto" @click="openCreate">
+                    Crear el primer cliente
+                  </button>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -566,7 +579,7 @@ function exportUrl() {
 
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" @click="showGenerateModal = false" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm">Cancelar</button>
-          <button type="button" :disabled="generateBusy || !generatePreview" @click="confirmGenerate" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-md text-sm disabled:opacity-50">
+          <button type="button" :disabled="generateBusy || !generatePreview" @click="confirmGenerate" class="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded-md text-sm disabled:opacity-50">
             Confirmar y generar
           </button>
         </div>

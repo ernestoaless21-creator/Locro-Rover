@@ -47,7 +47,7 @@ async function submit() {
 
 <template>
   <Modal :show="show" @close="$emit('close')">
-    <div class="p-6">
+    <div class="p-5">
       <h2 class="text-lg font-medium text-gray-900 mb-2">Marcar como retirado</h2>
       <p class="text-sm text-gray-600 mb-4">
         {{ orders.length }} pedido(s) seleccionado(s). Se registrara la fecha y tu usuario.

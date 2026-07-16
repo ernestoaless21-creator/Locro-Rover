@@ -60,7 +60,7 @@ function formatDate(value) {
   <AppLayout title="Regalos">
     <template #header>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <h2 class="font-semibold text-xl text-white leading-tight">
           Regalos — {{ year.label || `Locro ${year.year}` }}
         </h2>
         <div class="flex items-center gap-3">
@@ -68,7 +68,7 @@ function formatDate(value) {
           <button
             v-if="can('regalos.gestionar')"
             type="button"
-            class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm whitespace-nowrap"
+            class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap"
             @click="openCreate"
           >
             + Nuevo regalo
@@ -127,9 +127,11 @@ function formatDate(value) {
               </td>
             </tr>
             <tr v-if="!gifts.length">
-              <td colspan="6" class="p-6 text-center text-gray-500">
-                Sin regalos registrados en esta edición.
-                <button v-if="can('regalos.gestionar')" type="button" class="text-blue-400 block mt-1 mx-auto" @click="openCreate">
+              <td colspan="6" class="p-8 text-center text-gray-500">
+                <p class="text-2xl mb-1">🎁</p>
+                <p class="text-gray-300 font-medium">Todavía no hay regalos registrados en esta edición.</p>
+                <p class="text-xs mt-1">Anotá el primero cuando regales una porción.</p>
+                <button v-if="can('regalos.gestionar')" type="button" class="text-blue-400 block mt-2 mx-auto" @click="openCreate">
                   Registrar el primero
                 </button>
               </td>

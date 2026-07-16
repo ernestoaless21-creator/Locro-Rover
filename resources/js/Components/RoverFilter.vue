@@ -36,7 +36,7 @@ function route_query_preserved() {
     class="bg-gray-800 text-gray-200 border border-gray-600 rounded-md px-2 py-1 text-sm"
     @change="onChange"
   >
-    <option value="all">Todos los Rovers</option>
+    <option value="all">Rover: todos</option>
     <option v-for="rover in rovers" :key="rover.id" :value="rover.id">
       {{ rover.name }}
     </option>

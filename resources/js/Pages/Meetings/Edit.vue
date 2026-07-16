@@ -66,7 +66,7 @@ function submit() {
 <template>
     <AppLayout title="Editar acta">
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Editar acta</h2>
+            <h2 class="font-semibold text-xl text-white leading-tight">Editar acta</h2>
         </template>
 
         <div class="py-8">

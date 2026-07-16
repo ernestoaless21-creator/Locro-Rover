@@ -146,10 +146,10 @@ function destroyRecord(r) {
   <AppLayout :title="`Logística — Edición ${year.year}`">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('teams.show', team)" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('teams.show', team)" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Logística
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Logística histórica</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Logística histórica</h2>
       </div>
     </template>
 
@@ -223,7 +223,7 @@ function destroyRecord(r) {
                 @keydown.enter.prevent="submitNewCategory" />
               <p v-if="newCategoryForm.errors.name" class="text-xs text-red-600 mt-1">{{ newCategoryForm.errors.name }}</p>
             </div>
-            <button type="button" class="px-3 py-1.5 bg-gray-700 text-white text-xs rounded-lg hover:bg-gray-800" @click="submitNewCategory">
+            <button type="button" class="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500" @click="submitNewCategory">
               Crear
             </button>
           </div>
@@ -258,7 +258,7 @@ function destroyRecord(r) {
 
           <div class="flex gap-2 pt-1">
             <button type="button" :disabled="uploadForm.processing || !uploadForm.file" @click="submitUpload"
-              class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed">
               {{ uploadForm.processing ? 'Subiendo...' : 'Subir material' }}
             </button>
             <button type="button" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
@@ -361,7 +361,7 @@ function destroyRecord(r) {
                 <p v-if="editForm.errors.file" class="text-xs text-red-600 mt-1">{{ editForm.errors.file }}</p>
               </div>
               <div class="flex gap-2">
-                <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700" @click="saveEdit(r)">
+                <button type="button" class="px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-500" @click="saveEdit(r)">
                   Guardar
                 </button>
                 <button type="button" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200" @click="cancelEdit">
@@ -373,9 +373,16 @@ function destroyRecord(r) {
         </div>
       </div>
 
-      <p v-else class="text-center text-gray-400 py-12 text-sm">
-        {{ records.length === 0 ? 'No hay material logístico para esta edición.' : 'No se encontró ningún material con ese filtro.' }}
-      </p>
+      <div v-else class="text-center text-gray-400 py-12 text-sm">
+        <template v-if="records.length === 0">
+          <p class="text-2xl mb-1">🗺️</p>
+          <p>Todavía no hay material logístico para esta edición.</p>
+        </template>
+        <template v-else>
+          <p class="text-2xl mb-1">🔎</p>
+          <p>No se encontró ningún material con ese filtro.</p>
+        </template>
+      </div>
 
     </div>
   </AppLayout>

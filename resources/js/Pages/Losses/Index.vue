@@ -59,7 +59,7 @@ function formatDate(value) {
   <AppLayout title="Pérdidas">
     <template #header>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <h2 class="font-semibold text-xl text-white leading-tight">
           Pérdidas — {{ year.label || `Locro ${year.year}` }}
         </h2>
         <div class="flex items-center gap-3">
@@ -67,7 +67,7 @@ function formatDate(value) {
           <button
             v-if="can('perdidas.gestionar')"
             type="button"
-            class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm whitespace-nowrap"
+            class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap"
             @click="openCreate"
           >
             + Nueva pérdida
@@ -124,9 +124,11 @@ function formatDate(value) {
               </td>
             </tr>
             <tr v-if="!losses.length">
-              <td colspan="5" class="p-6 text-center text-gray-500">
-                Sin pérdidas registradas en esta edición.
-                <button v-if="can('perdidas.gestionar')" type="button" class="text-blue-400 block mt-1 mx-auto" @click="openCreate">
+              <td colspan="5" class="p-8 text-center text-gray-500">
+                <p class="text-2xl mb-1">🫗</p>
+                <p class="text-gray-300 font-medium">Todavía no hay pérdidas registradas en esta edición.</p>
+                <p class="text-xs mt-1">Mejor así — anotá si se llega a perder alguna porción.</p>
+                <button v-if="can('perdidas.gestionar')" type="button" class="text-blue-400 block mt-2 mx-auto" @click="openCreate">
                   Registrar la primera
                 </button>
               </td>

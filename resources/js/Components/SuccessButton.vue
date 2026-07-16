@@ -4,13 +4,13 @@ import AppButton from '@/Components/AppButton.vue';
 defineProps({
     type: {
         type: String,
-        default: 'submit',
+        default: 'button',
     },
 });
 </script>
 
 <template>
-    <AppButton variant="primary" :type="type">
+    <AppButton variant="success" :type="type">
         <slot />
     </AppButton>
 </template>

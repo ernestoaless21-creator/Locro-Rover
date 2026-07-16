@@ -15,7 +15,7 @@
  *   se pueden crear nuevas desde aca (ver OrderLineForm.vue).
  */
 import { Head, router } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import OrderLineForm from '@/Components/OrderLineForm.vue'
@@ -23,6 +23,9 @@ import AssignOrderModal from '@/Components/AssignOrderModal.vue'
 import PayOrderModal from '@/Components/PayOrderModal.vue'
 import WithdrawOrderModal from '@/Components/WithdrawOrderModal.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
+import SecondaryButton from '@/Components/SecondaryButton.vue'
+import DangerButton from '@/Components/DangerButton.vue'
+import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
@@ -40,11 +43,25 @@ const props = defineProps({
 
 const toast = useToast()
 
+// Fase 18 (microinteracciones): retorno de foco al elemento que abrio un
+// modal, al cerrarlo (accesibilidad de teclado). Un solo modal abierto a la
+// vez en esta pantalla, asi que alcanza una referencia compartida.
+const lastTrigger = ref(null)
+function rememberTrigger(e) {
+  lastTrigger.value = e.currentTarget
+}
+function returnFocus() {
+  nextTick(() => lastTrigger.value?.focus())
+}
+
+const savingSelfAssign = ref(false)
 function selfAssignRover() {
+  savingSelfAssign.value = true
   router.put(`/orders/${props.order.id}`, { rover_id: props.authUserId }, {
     preserveScroll: true,
     onSuccess: () => toast.success('Pedido autoasignado.'),
     onError: () => toast.error('No se pudo autoasignar.'),
+    onFinish: () => { savingSelfAssign.value = false },
   })
 }
 
@@ -143,7 +160,12 @@ function saveGeneral() {
   )
 }
 
+// Fase 18: guard de guardado (evita doble click; tambien deshabilita el
+// boton de OrderLineForm via su prop 'disabled').
+const savingAdvancedItem = ref(false)
+
 async function addAdvancedItem(payload) {
+  savingAdvancedItem.value = true
   try {
     const { data } = await axios.post(`/orders/${order.value.id}/items`, payload)
     items.value.push(data.item)
@@ -151,10 +173,13 @@ async function addAdvancedItem(payload) {
     toast.success('Excepcion agregada.')
   } catch (e) {
     toast.error('No se pudo agregar la excepcion.')
+  } finally {
+    savingAdvancedItem.value = false
   }
 }
 
 async function updateAdvancedItem(itemId, payload) {
+  savingAdvancedItem.value = true
   try {
     const { data } = await axios.put(`/orders/${order.value.id}/items/${itemId}`, payload)
     const index = items.value.findIndex((i) => i.id === itemId)
@@ -164,18 +189,42 @@ async function updateAdvancedItem(itemId, payload) {
     toast.success('Excepcion actualizada.')
   } catch (e) {
     toast.error('No se pudo actualizar la excepcion.')
+  } finally {
+    savingAdvancedItem.value = false
   }
 }
 
-async function deleteAdvancedItem(itemId) {
-  if (!confirm('¿Eliminar esta excepcion del pedido?')) return
+// Fase 18: el confirm() nativo pasa a ser el ConfirmationModal estandar de
+// la app (ya retemizado en oscuro). confirmDeleteItemId guarda que item
+// esta pendiente de confirmar (null = ningun modal abierto).
+const confirmDeleteItemId = ref(null)
+const deletingItem = ref(false)
+const advancedBusy = computed(() => savingAdvancedItem.value || deletingItem.value)
+
+function requestDeleteItem(itemId, event) {
+  rememberTrigger(event)
+  confirmDeleteItemId.value = itemId
+}
+
+function cancelDeleteItem() {
+  confirmDeleteItemId.value = null
+  returnFocus()
+}
+
+async function confirmDeleteItem() {
+  const itemId = confirmDeleteItemId.value
+  deletingItem.value = true
   try {
     const { data } = await axios.delete(`/orders/${order.value.id}/items/${itemId}`)
     items.value = items.value.filter((i) => i.id !== itemId)
     order.value = { ...order.value, ...data.order }
     toast.success('Excepcion eliminada.')
+    confirmDeleteItemId.value = null
   } catch (e) {
     toast.error('No se pudo eliminar la excepcion.')
+  } finally {
+    deletingItem.value = false
+    returnFocus()
   }
 }
 
@@ -183,8 +232,22 @@ function onBulkActionDone() {
   router.reload({ only: ['order'] })
 }
 
-async function deleteOrder() {
-  if (!confirm(`¿Eliminar el pedido #${order.value.id}? Esta accion no se puede deshacer desde aca.`)) return
+// Fase 18: el confirm() nativo pasa a ser el ConfirmationModal estandar.
+const showDeleteOrderConfirm = ref(false)
+const deletingOrder = ref(false)
+
+function requestDeleteOrder(event) {
+  rememberTrigger(event)
+  showDeleteOrderConfirm.value = true
+}
+
+function cancelDeleteOrder() {
+  showDeleteOrderConfirm.value = false
+  returnFocus()
+}
+
+async function confirmDeleteOrder() {
+  deletingOrder.value = true
   // Fase 7 (correccion 2), seccion 4: antes se usaba router.delete (Inertia),
   // que ante un 403 (usuario sin 'pedidos.eliminar') no mostraba nada: el
   // pedido seguia ahi sin ninguna explicacion. axios + try/catch permite
@@ -199,6 +262,9 @@ async function deleteOrder() {
         ? 'No tenes permiso para eliminar pedidos.'
         : 'No se pudo eliminar el pedido. Intenta de nuevo.')
     toast.error(message)
+    deletingOrder.value = false
+    showDeleteOrderConfirm.value = false
+    returnFocus()
   }
 }
 </script>
@@ -208,14 +274,14 @@ async function deleteOrder() {
 
   <AppLayout :title="`Pedido #${order.id}`">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+      <h2 class="font-semibold text-xl text-white leading-tight">
         Pedido #{{ order.id }} — {{ order.client?.first_name }} {{ order.client?.last_name }}
       </h2>
     </template>
 
-    <div class="py-8 max-w-2xl mx-auto px-4 space-y-6">
+    <div class="py-8 max-w-2xl mx-auto px-4 space-y-4">
       <!-- Porciones (edicion rapida) -->
-      <div class="bg-gray-900 text-white rounded-lg p-6 space-y-4">
+      <div class="bg-gray-900 text-white rounded-lg p-5 space-y-4">
         <label class="text-sm text-gray-400 block mb-1">Cantidad de porciones de locro</label>
         <div class="flex items-center gap-2">
           <button
@@ -268,7 +334,7 @@ async function deleteOrder() {
       </div>
 
       <!-- Datos generales -->
-      <div class="bg-gray-900 text-white rounded-lg p-6 space-y-4">
+      <div class="bg-gray-900 text-white rounded-lg p-5 space-y-4">
         <h3 class="text-sm text-gray-400">Datos generales</h3>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -289,10 +355,11 @@ async function deleteOrder() {
             <p class="text-yellow-400 text-sm mb-1">Sin asignar</p>
             <button
               type="button"
-              class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-md"
+              class="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs px-3 py-1.5 rounded-md"
+              :disabled="savingSelfAssign"
               @click="selfAssignRover"
             >
-              Autoasignarme este pedido
+              {{ savingSelfAssign ? 'Asignando...' : 'Autoasignarme este pedido' }}
             </button>
           </div>
           <div v-else>
@@ -346,7 +413,7 @@ async function deleteOrder() {
             v-if="canDelete"
             type="button"
             class="text-red-400 hover:text-red-300 text-sm"
-            @click="deleteOrder"
+            @click="requestDeleteOrder($event)"
           >
             Eliminar pedido
           </button>
@@ -357,7 +424,7 @@ async function deleteOrder() {
       </div>
 
       <!-- Opciones avanzadas: excepciones de precio -->
-      <div v-if="canExceptionalPrice || advancedItems.length" class="bg-gray-900 text-white rounded-lg p-6">
+      <div v-if="canExceptionalPrice || advancedItems.length" class="bg-gray-900 text-white rounded-lg p-5">
         <button
           type="button"
           class="text-sm text-gray-400 hover:text-white flex items-center gap-1"
@@ -382,8 +449,9 @@ async function deleteOrder() {
                 <button
                   v-if="canExceptionalPrice"
                   type="button"
-                  class="text-red-400 hover:text-red-300 text-xs"
-                  @click="deleteAdvancedItem(item.id)"
+                  class="text-red-400 hover:text-red-300 disabled:opacity-40 text-xs"
+                  :disabled="advancedBusy"
+                  @click="requestDeleteItem(item.id, $event)"
                 >
                   Eliminar
                 </button>
@@ -393,6 +461,7 @@ async function deleteOrder() {
               v-else-if="editingItemId === item.id"
               :year-id="yearId"
               :initial="item"
+              :disabled="savingAdvancedItem"
               @submit="(payload) => updateAdvancedItem(item.id, payload)"
               @cancel="editingItemId = null"
             />
@@ -406,7 +475,8 @@ async function deleteOrder() {
                 <button
                   v-if="canExceptionalPrice"
                   type="button"
-                  class="text-blue-400 hover:text-blue-300 text-xs"
+                  class="text-blue-400 hover:text-blue-300 disabled:opacity-40 text-xs"
+                  :disabled="advancedBusy"
                   @click="editingItemId = item.id"
                 >
                   Editar
@@ -414,8 +484,9 @@ async function deleteOrder() {
                 <button
                   v-if="canExceptionalPrice"
                   type="button"
-                  class="text-red-400 hover:text-red-300 text-xs"
-                  @click="deleteAdvancedItem(item.id)"
+                  class="text-red-400 hover:text-red-300 disabled:opacity-40 text-xs"
+                  :disabled="advancedBusy"
+                  @click="requestDeleteItem(item.id, $event)"
                 >
                   Eliminar
                 </button>
@@ -423,19 +494,19 @@ async function deleteOrder() {
             </div>
           </div>
 
-          <OrderLineForm v-if="canExceptionalPrice && editingItemId === null && yearId" :year-id="yearId" @submit="addAdvancedItem" />
+          <OrderLineForm v-if="canExceptionalPrice && editingItemId === null && yearId" :year-id="yearId" :disabled="savingAdvancedItem" @submit="addAdvancedItem" />
         </div>
       </div>
 
       <!-- Pagos -->
-      <div class="bg-gray-900 text-white rounded-lg p-6 space-y-2">
+      <div class="bg-gray-900 text-white rounded-lg p-5 space-y-2">
         <div class="flex justify-between items-center">
           <h3 class="text-sm text-gray-400">Pagos registrados</h3>
           <button
             v-if="canRegisterPayment"
             type="button"
-            class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-md text-sm"
-            @click="showPayModal = true"
+            class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded-md text-sm"
+            @click="rememberTrigger($event); showPayModal = true"
           >
             Registrar pago
           </button>
@@ -448,12 +519,12 @@ async function deleteOrder() {
       </div>
 
       <!-- Retiro / Rover -->
-      <div class="bg-gray-900 text-white rounded-lg p-6 flex flex-wrap gap-3">
+      <div class="bg-gray-900 text-white rounded-lg p-5 flex flex-wrap gap-3">
         <button
           v-if="canWithdraw && order.withdrawal_status !== 'retirado'"
           type="button"
-          class="bg-green-700 hover:bg-green-600 px-3 py-2 rounded-md text-sm"
-          @click="showWithdrawModal = true"
+          class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-md text-sm"
+          @click="rememberTrigger($event); showWithdrawModal = true"
         >
           Marcar como retirado
         </button>
@@ -466,7 +537,7 @@ async function deleteOrder() {
           v-if="canAssignRover"
           type="button"
           class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-md text-sm"
-          @click="showAssignModal = true"
+          @click="rememberTrigger($event); showAssignModal = true"
         >
           Reasignar Rover
         </button>
@@ -477,21 +548,45 @@ async function deleteOrder() {
       :show="showAssignModal"
       :orders="[order]"
       :rovers="rovers"
-      @close="showAssignModal = false"
+      @close="showAssignModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
     <PayOrderModal
       :show="showPayModal"
       :orders="[order]"
       :payment-methods="paymentMethods"
-      @close="showPayModal = false"
+      @close="showPayModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
     <WithdrawOrderModal
       :show="showWithdrawModal"
       :orders="[order]"
-      @close="showWithdrawModal = false"
+      @close="showWithdrawModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
+
+    <!-- Fase 18: los 2 confirm() nativos pasan a ser el ConfirmationModal
+         estandar (ya retemizado en oscuro) de toda la app. -->
+    <ConfirmationModal :show="confirmDeleteItemId !== null" @close="cancelDeleteItem">
+      <template #title>Eliminar excepción</template>
+      <template #content>¿Eliminar esta excepción del pedido?</template>
+      <template #footer>
+        <SecondaryButton @click="cancelDeleteItem">Cancelar</SecondaryButton>
+        <DangerButton class="ms-3" :disabled="deletingItem" @click="confirmDeleteItem">
+          {{ deletingItem ? 'Eliminando...' : 'Eliminar' }}
+        </DangerButton>
+      </template>
+    </ConfirmationModal>
+
+    <ConfirmationModal :show="showDeleteOrderConfirm" @close="cancelDeleteOrder">
+      <template #title>Eliminar pedido</template>
+      <template #content>¿Eliminar el pedido #{{ order.id }}? Esta acción no se puede deshacer desde acá.</template>
+      <template #footer>
+        <SecondaryButton @click="cancelDeleteOrder">Cancelar</SecondaryButton>
+        <DangerButton class="ms-3" :disabled="deletingOrder" @click="confirmDeleteOrder">
+          {{ deletingOrder ? 'Eliminando...' : 'Eliminar' }}
+        </DangerButton>
+      </template>
+    </ConfirmationModal>
   </AppLayout>
 </template>

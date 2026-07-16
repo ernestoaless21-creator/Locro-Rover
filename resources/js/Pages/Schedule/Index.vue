@@ -112,10 +112,12 @@ function statusClass(status) {
 function titleClass(status) {
     // Realizada: sin tachado — el check + "Realizada" ya comunican el estado,
     // y el cronograma también funciona como memoria histórica (debe seguir
-    // siendo legible después de completarse).
-    if (status === 'completed') return 'text-gray-700'
-    if (status === 'skipped')   return 'text-gray-400 line-through'
-    return 'text-gray-900'
+    // siendo legible después de completarse). Fase 18 (ajuste fino de
+    // contraste): estos valores son para texto sobre el fondo oscuro de la
+    // pagina (ink), no sobre las tarjetas claras de los formularios.
+    if (status === 'completed') return 'text-gray-300'
+    if (status === 'skipped')   return 'text-gray-500 line-through'
+    return 'text-white'
 }
 
 function diffClass(diff) {
@@ -334,7 +336,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
     <AppLayout title="Cronograma">
         <template #header>
             <div class="flex items-center justify-between gap-4 flex-wrap">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                <h2 class="font-semibold text-xl text-white leading-tight">
                     Cronograma {{ year.label }}
                 </h2>
                 <div class="flex items-center gap-3">
@@ -342,7 +344,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                     <a
                         v-if="canManage"
                         :href="route('schedule.import')"
-                        class="text-sm text-indigo-600 hover:text-indigo-800"
+                        class="text-sm text-ember hover:text-ember-strong"
                     >
                         Importar edición anterior
                     </a>
@@ -383,7 +385,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                 <button
                                     type="submit"
                                     :disabled="notesForm.processing"
-                                    class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                    class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50"
                                 >
                                     Guardar
                                 </button>
@@ -411,12 +413,13 @@ const isEmpty = computed(() => localDays.value.length === 0)
                 </div>
 
                 <!-- ─── Timeline ───────────────────────────────────────────── -->
-                <div v-if="isEmpty && !showNewDayForm" class="text-center py-16 text-gray-500">
-                    <p class="text-base">No hay días en el cronograma de esta edición.</p>
+                <div v-if="isEmpty && !showNewDayForm" class="text-center py-16 text-gray-400">
+                    <p class="text-2xl mb-1">🗓️</p>
+                    <p class="text-base">Todavía no hay días en el cronograma de esta edición.</p>
                     <button
                         v-if="canManage"
                         type="button"
-                        class="mt-4 text-sm text-indigo-600 hover:text-indigo-800"
+                        class="mt-4 text-sm text-ember hover:text-ember-strong"
                         @click="openNewDay"
                     >
                         + Agregar primer día
@@ -432,14 +435,14 @@ const isEmpty = computed(() => localDays.value.length === 0)
                             <button
                                 type="button"
                                 :disabled="dayIdx === 0"
-                                class="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none"
+                                class="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none"
                                 title="Subir"
                                 @click="reorderDay(day.id, 'up')"
                             >▲</button>
                             <button
                                 type="button"
                                 :disabled="dayIdx === localDays.length - 1"
-                                class="text-gray-300 hover:text-gray-600 disabled:opacity-20 text-xs leading-none"
+                                class="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none"
                                 title="Bajar"
                                 @click="reorderDay(day.id, 'down')"
                             >▼</button>
@@ -484,7 +487,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                 </div>
                                 <div class="flex gap-2">
                                     <button type="submit" :disabled="dayForm.processing"
-                                        class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                                        class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
                                         Guardar
                                     </button>
                                     <button type="button" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
@@ -496,29 +499,29 @@ const isEmpty = computed(() => localDays.value.length === 0)
 
                             <!-- Day label -->
                             <div v-else class="flex items-center flex-wrap gap-x-3 gap-y-1 mb-2">
-                                <span class="text-lg font-bold text-gray-900 uppercase tracking-wide">
+                                <span class="text-lg font-bold text-white uppercase tracking-wide">
                                     {{ fmtDate(day.date) }}
                                 </span>
-                                <span v-if="day.title" class="text-base font-medium text-gray-600">
+                                <span v-if="day.title" class="text-base font-medium text-gray-300">
                                     · {{ day.title }}
                                 </span>
-                                <p v-if="day.description" class="w-full text-sm text-gray-500 mt-0.5">
+                                <p v-if="day.description" class="w-full text-sm text-gray-400 mt-0.5">
                                     {{ day.description }}
                                 </p>
                                 <!-- Day actions -->
                                 <div v-if="canManage" class="flex items-center gap-3 ml-auto">
                                     <button type="button"
-                                        class="text-xs text-indigo-600 hover:text-indigo-800"
+                                        class="text-xs text-ember hover:text-ember-strong"
                                         @click="openNewActivity(day.id)">
                                         + Actividad
                                     </button>
                                     <button type="button"
-                                        class="text-xs text-gray-500 hover:text-gray-700"
+                                        class="text-xs text-gray-400 hover:text-white"
                                         @click="openEditDay(day)">
                                         Editar
                                     </button>
                                     <button type="button"
-                                        class="text-xs text-red-500 hover:text-red-700"
+                                        class="text-xs text-red-400 hover:text-red-300"
                                         @click="deleteDay(day.id)">
                                         Eliminar
                                     </button>
@@ -585,7 +588,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
 
                                 <div class="flex gap-2">
                                     <button type="submit"
-                                        class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+                                        class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500">
                                         Guardar
                                     </button>
                                     <button type="button" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
@@ -630,7 +633,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                 </div>
                                 <div class="flex flex-wrap gap-2">
                                     <button type="submit"
-                                        class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+                                        class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500">
                                         Guardar
                                     </button>
                                     <button type="button" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
@@ -647,16 +650,16 @@ const isEmpty = computed(() => localDays.value.length === 0)
                             <!-- Activity row (view) -->
                             <div
                                 v-else
-                                class="flex items-start gap-2 py-2 border-b border-gray-100"
+                                class="flex items-start gap-2 py-2 border-b border-border"
                                 :class="{ 'border-b-0': actIdx === day.activities.length - 1 }"
                             >
                                 <!-- Reorder buttons: only meaningful for activities without a fixed start_time -->
                                 <div v-if="canManage && !act.start_time" class="flex flex-col gap-0.5 mt-0.5 flex-shrink-0 w-3">
                                     <button type="button" :disabled="isFirstUntimed(day, act)"
-                                        class="text-gray-200 hover:text-gray-500 disabled:opacity-20 text-xs leading-none group-hover:text-gray-300"
+                                        class="text-gray-700 hover:text-gray-400 disabled:opacity-20 text-xs leading-none group-hover:text-gray-500"
                                         @click="reorderActivity(day.id, act.id, 'up')">▲</button>
                                     <button type="button" :disabled="isLastUntimed(day, act)"
-                                        class="text-gray-200 hover:text-gray-500 disabled:opacity-20 text-xs leading-none group-hover:text-gray-300"
+                                        class="text-gray-700 hover:text-gray-400 disabled:opacity-20 text-xs leading-none group-hover:text-gray-500"
                                         @click="reorderActivity(day.id, act.id, 'down')">▼</button>
                                 </div>
                                 <div v-else-if="canManage" class="w-3 flex-shrink-0"></div>
@@ -680,23 +683,23 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                             [{{ TEAM_LABELS[act.team] ?? act.team }}]
                                         </span>
                                     </p>
-                                    <p v-if="act.description" class="text-xs text-gray-500 mt-0.5 whitespace-pre-line">
+                                    <p v-if="act.description" class="text-xs text-gray-400 mt-0.5 whitespace-pre-line">
                                         {{ act.description }}
                                     </p>
 
                                     <!-- Completion info: "Previsto 18:00 · Real 18:25 · +25 min" cuando hay datos suficientes -->
                                     <div v-if="act.status === 'completed'" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                                         <span v-if="act.start_time" class="text-gray-400">Previsto {{ fmtTime(act.start_time) }}</span>
-                                        <span v-if="act.start_time && (act.actual_date || act.actual_time)" class="text-gray-300">·</span>
-                                        <span v-if="act.actual_date && act.actual_time" class="text-green-700">
+                                        <span v-if="act.start_time && (act.actual_date || act.actual_time)" class="text-gray-400">·</span>
+                                        <span v-if="act.actual_date && act.actual_time" class="text-green-400">
                                             Real <template v-if="!isSameDay(day, act)">{{ fmtShortDate(act.actual_date) }} </template>{{ act.actual_time }}
                                         </span>
-                                        <span v-else-if="act.actual_date" class="text-green-700">
+                                        <span v-else-if="act.actual_date" class="text-green-400">
                                             Real {{ fmtShortDate(act.actual_date) }}
                                         </span>
-                                        <span v-else class="text-green-600">Realizada</span>
+                                        <span v-else class="text-green-500">Realizada</span>
                                         <template v-if="fmtDiff(day, act)">
-                                            <span class="text-gray-300">·</span>
+                                            <span class="text-gray-400">·</span>
                                             <span class="font-medium" :class="diffClass(fmtDiff(day, act))">
                                                 {{ fmtDiff(day, act) }}
                                             </span>
@@ -705,7 +708,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                     <p v-if="act.status === 'skipped'" class="text-xs text-gray-400 mt-0.5">Omitida</p>
 
                                     <!-- Observation -->
-                                    <p v-if="act.notes" class="text-xs text-amber-700 italic mt-1 border-l-2 border-amber-200 pl-2">
+                                    <p v-if="act.notes" class="text-xs text-amber-400 italic mt-1 border-l-2 border-amber-700 pl-2">
                                         {{ act.notes }}
                                     </p>
 
@@ -714,43 +717,43 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                     <div v-if="canManage" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                                         <template v-if="act.status === 'pending'">
                                             <button type="button"
-                                                class="text-xs font-medium text-green-600 hover:text-green-800"
+                                                class="text-xs font-medium text-green-500 hover:text-green-400"
                                                 @click="markDone(day.id, act.id)">
                                                 Marcar realizada
                                             </button>
                                             <button type="button"
-                                                class="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                                class="text-xs font-medium text-blue-500 hover:text-blue-400"
                                                 @click="completeNow(day.id, act.id)">
                                                 Completar ahora
                                             </button>
                                             <button type="button"
-                                                class="text-xs text-gray-300 hover:text-gray-500"
+                                                class="text-xs text-gray-300 hover:text-white"
                                                 @click="skipActivity(day.id, act.id)">
                                                 Omitir
                                             </button>
                                         </template>
                                         <template v-else-if="act.status === 'completed'">
                                             <button type="button"
-                                                class="text-xs text-indigo-500 hover:text-indigo-700"
+                                                class="text-xs text-ember hover:text-ember-strong"
                                                 @click="openEditExecution(act)">
                                                 Editar ejecución
                                             </button>
                                             <button type="button"
-                                                class="text-xs text-gray-300 hover:text-gray-500"
+                                                class="text-xs text-gray-300 hover:text-white"
                                                 @click="resetActivity(day.id, act.id)">
                                                 Volver a pendiente
                                             </button>
                                         </template>
                                         <template v-else>
                                             <button type="button"
-                                                class="text-xs text-gray-300 hover:text-gray-500"
+                                                class="text-xs text-gray-300 hover:text-white"
                                                 @click="resetActivity(day.id, act.id)">
                                                 Volver a pendiente
                                             </button>
                                         </template>
-                                        <span class="text-gray-200">|</span>
+                                        <span class="text-gray-600">|</span>
                                         <button type="button"
-                                            class="text-xs text-gray-300 hover:text-gray-600"
+                                            class="text-xs text-gray-300 hover:text-white"
                                             @click="openEditActivity(act)">
                                             Editar
                                         </button>
@@ -808,7 +811,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
 
                             <div class="flex gap-2">
                                 <button type="submit"
-                                    class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
+                                    class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500">
                                     Agregar
                                 </button>
                                 <button type="button" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
@@ -825,7 +828,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                         >
                             Sin actividades.
                             <button v-if="canManage" type="button"
-                                class="ml-1 text-indigo-500 hover:text-indigo-700 not-italic"
+                                class="ml-1 text-ember hover:text-ember-strong not-italic"
                                 @click="openNewActivity(day.id)">
                                 + Agregar
                             </button>
@@ -833,7 +836,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                     </div>
 
                     <!-- Divider between days -->
-                    <div v-if="dayIdx < localDays.length - 1" class="border-t border-gray-100 mt-4" />
+                    <div v-if="dayIdx < localDays.length - 1" class="border-t border-border mt-4" />
                 </div>
 
                 <!-- ─── New day form ────────────────────────────────────── -->
@@ -863,7 +866,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                     </div>
                     <div class="flex gap-2">
                         <button type="submit" :disabled="dayForm.processing"
-                            class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                            class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
                             Crear día
                         </button>
                         <button type="button" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
@@ -877,7 +880,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                 <div v-if="canManage && !showNewDayForm" class="text-center pt-2">
                     <button
                         type="button"
-                        class="text-sm text-indigo-600 hover:text-indigo-800"
+                        class="text-sm text-ember hover:text-ember-strong"
                         @click="openNewDay"
                     >
                         + Agregar día

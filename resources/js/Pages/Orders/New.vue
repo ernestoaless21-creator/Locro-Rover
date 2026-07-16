@@ -14,12 +14,13 @@
  *   usuario tiene el permiso 'pedidos.precio-excepcional'.
  */
 import { Head, router } from '@inertiajs/vue3'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import ClientPicker from '@/Components/ClientPicker.vue'
 import OrderLineForm from '@/Components/OrderLineForm.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
+import Modal from '@/Components/Modal.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
@@ -44,6 +45,13 @@ const advancedItems = ref([])
 const showAdvanced = ref(false)
 const saving = ref(false)
 const showConfirm = ref(false)
+
+// Fase 18 (microinteracciones): retorno de foco al boton que abrio el modal
+// de confirmacion, al cerrarlo.
+const lastTrigger = ref(null)
+function returnFocus() {
+  nextTick(() => lastTrigger.value?.focus())
+}
 
 // Al elegir cliente, si ya esta marcado "Es delivery", precargar su
 // direccion permanente (aunque este vacia). Sigue siendo editable para este
@@ -115,7 +123,8 @@ function money(value) {
 const duplicateOrders = ref([])
 const checkingDuplicates = ref(false)
 
-async function requestSave() {
+async function requestSave(event) {
+  lastTrigger.value = event?.currentTarget ?? null
   if (!client.value) {
     toast.error('Selecciona o crea un cliente antes de guardar.')
     return
@@ -169,6 +178,7 @@ function confirmSave() {
       onError: () => {
         toast.error('No se pudo crear el pedido. Revisa los datos.')
         showConfirm.value = false
+        returnFocus()
       },
       onFinish: () => { saving.value = false },
     }
@@ -181,11 +191,11 @@ function confirmSave() {
 
   <AppLayout title="Nuevo pedido">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">Nuevo pedido</h2>
+      <h2 class="font-semibold text-xl text-white leading-tight">Nuevo pedido</h2>
     </template>
 
     <div class="py-8 max-w-2xl mx-auto px-4">
-      <div class="bg-gray-900 text-white rounded-lg p-6 space-y-6">
+      <div class="bg-gray-900 text-white rounded-lg p-5 space-y-4">
         <div>
           <label class="text-sm text-gray-400 block mb-1">Cliente</label>
           <ClientPicker v-model="client" />
@@ -317,16 +327,18 @@ function confirmSave() {
         </div>
 
         <div class="flex justify-end">
-          <PrimaryButton :disabled="saving" @click="requestSave">
-            Guardar pedido
+          <PrimaryButton :disabled="saving || checkingDuplicates" @click="requestSave($event)">
+            {{ checkingDuplicates ? 'Verificando...' : 'Guardar pedido' }}
           </PrimaryButton>
         </div>
       </div>
     </div>
 
-    <!-- Confirmacion antes de guardar -->
-    <div v-if="showConfirm" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+    <!-- Confirmacion antes de guardar. Fase 18: migrado a <Modal> (antes un
+         <div> a mano) para que cierre con Escape como el resto de los
+         modales de la app. -->
+    <Modal :show="showConfirm" max-width="sm" @close="showConfirm = false; returnFocus()">
+      <div class="bg-white rounded-lg p-5">
         <h3 class="text-lg font-medium text-gray-900 mb-2">Confirmar pedido</h3>
 
         <!-- Fase 7, seccion 8: advertencia de pedido duplicado. Nunca bloquea,
@@ -353,17 +365,17 @@ function confirmSave() {
           ¿Confirmas guardar este pedido?
         </p>
         <div class="flex justify-end gap-2">
-          <button type="button" class="px-4 py-2 text-sm text-gray-600" @click="showConfirm = false">Cancelar</button>
+          <button type="button" class="px-4 py-2 text-sm text-gray-600" @click="showConfirm = false; returnFocus()">Cancelar</button>
           <button
             type="button"
             :disabled="saving"
-            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md disabled:opacity-50"
+            class="px-4 py-2 text-sm bg-green-600 hover:bg-green-500 text-white rounded-md disabled:opacity-50"
             @click="confirmSave"
           >
             {{ saving ? 'Guardando...' : (duplicateOrders.length ? 'Crear de todas formas' : 'Confirmar') }}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   </AppLayout>
 </template>

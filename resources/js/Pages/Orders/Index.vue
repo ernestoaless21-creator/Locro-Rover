@@ -13,15 +13,17 @@
  * - seccion 4: el buscador se restaura solo al vaciarse, sin exigir Enter.
  */
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import RoverFilter from '@/Components/RoverFilter.vue'
+import Modal from '@/Components/Modal.vue'
 import AssignOrderModal from '@/Components/AssignOrderModal.vue'
 import PayOrderModal from '@/Components/PayOrderModal.vue'
 import WithdrawOrderModal from '@/Components/WithdrawOrderModal.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
+import EmptyState from '@/Components/EmptyState.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
@@ -52,6 +54,40 @@ const page = usePage()
 const can = (perm) => (page.props.permissions ?? []).includes(perm)
 const toast = useToast()
 
+// Fase 18: filtros colapsables detras de un boton "Filtros". La busqueda
+// principal (search) siempre queda visible; el panel arranca abierto si ya
+// hay algun filtro avanzado aplicado, para no esconder un estado activo.
+const hasAdvancedFilters = computed(() => Boolean(
+  (props.filters.rover_id && props.filters.rover_id !== 'all') ||
+  props.filters.withdrawal_status ||
+  props.filters.payment_status ||
+  props.filters.delivery_type ||
+  props.filters.my_assigned_clients ||
+  props.filters.my_sales
+))
+const activeFilterCount = computed(() => [
+  props.filters.rover_id && props.filters.rover_id !== 'all',
+  props.filters.withdrawal_status,
+  props.filters.payment_status,
+  props.filters.delivery_type,
+  props.filters.my_assigned_clients,
+  props.filters.my_sales,
+].filter(Boolean).length)
+const showFilters = ref(hasAdvancedFilters.value)
+const isFiltering = computed(() => Boolean(props.filters.search || hasAdvancedFilters.value))
+
+// Fase 18: si el estado vacio es producto de una busqueda con texto, el
+// mensaje aprovecha ese contexto (nombre buscado). Sin busqueda, se
+// mantiene el mensaje general de siempre -- mismo criterio pensado para
+// reutilizarse en otros modulos (Clientes, Compras, etc.), cambiando solo
+// el texto de "pedidos" por el que corresponda.
+const emptyOrdersDescription = computed(() => {
+  const term = props.filters.search
+  return term
+    ? `No encontramos pedidos para "${term}". Probá cambiando los filtros o verificando el nombre.`
+    : 'Probá cambiando los filtros o... ¡salí a vender un poco más! 🍲'
+})
+
 const search = ref(props.filters.search ?? '')
 const suggestions = ref([])
 const showSuggestions = ref(false)
@@ -65,6 +101,21 @@ const showPayAndWithdrawModal = ref(false)
 const payAndWithdrawMethod = ref(props.paymentMethods[0]?.id ?? '')
 const payAndWithdrawBusy = ref(false)
 const withdrawBusyIds = ref(new Set())
+
+// Fase 18 (microinteracciones): foco automatico en el buscador principal al
+// entrar a la pantalla (tambien cubre "volver al buscador" despues de crear
+// un pedido, ya que New.vue redirige aca). Y retorno de foco al elemento que
+// abrio un modal, al cerrarlo (accesibilidad de teclado).
+const searchInput = ref(null)
+onMounted(() => searchInput.value?.focus())
+
+const lastTrigger = ref(null)
+function rememberTrigger(e) {
+  lastTrigger.value = e.currentTarget
+}
+function returnFocus() {
+  nextTick(() => lastTrigger.value?.focus())
+}
 
 function reloadWith(extra) {
   router.get('/orders', { ...props.filters, ...extra, year_id: props.year.id }, {
@@ -170,6 +221,7 @@ async function confirmPayAndWithdraw() {
     })
     toast.success(`${data.withdrawn} pedido(s) retirados, ${data.payments_created} pago(s) registrados.`)
     showPayAndWithdrawModal.value = false
+    returnFocus()
     onBulkActionDone()
   } catch (e) {
     toast.error('No se pudo completar la accion. Verifica tus permisos e intenta de nuevo.')
@@ -223,10 +275,12 @@ function barColor(portions) {
   return `hsl(${Math.round(pct * 120)}, 65%, 45%)`
 }
 
-const goalLinePercent = computed(() => {
-  if (!salesGoal.value || maxPortions.value <= 0) return null
-  return Math.round((salesGoal.value / maxPortions.value) * 100)
-})
+// Fase 18: medallas para el podio del ranking (roverRanking ya viene
+// ordenado desc por total_portions desde el backend, ver OrderController::roverRanking).
+const rankIcons = ['🥇', '🥈', '🥉']
+function rankBadge(index) {
+  return rankIcons[index] ?? `${index + 1}º`
+}
 
 // Fase 8 (correccion): filtros de retiro clickeables mutuamente excluyentes.
 // Se usan nombres distintos de toggleWithdrawn (que ya existe para el checkbox
@@ -250,8 +304,13 @@ function money(value) {
   return `$${Number(value).toLocaleString('es-AR')}`
 }
 
+// Fase 18: la columna "Estado" usa "Sin pagar" en vez de "Pendiente" (esa
+// palabra ya la usa la columna de monto). Se probo el semaforo de emojis
+// visualmente y se decidio texto + color del badge, sin emoji (menos ruido
+// visual). Los valores internos (total_paid vs total_amount) y las clases
+// de color de fondo no cambian -- solo el texto.
 function paymentStatus(order) {
-  if (Number(order.total_paid) <= 0) return { label: 'Pendiente', cls: 'bg-gray-700' }
+  if (Number(order.total_paid) <= 0) return { label: 'Sin pagar', cls: 'bg-gray-700' }
   if (Number(order.total_paid) >= Number(order.total_amount)) return { label: 'Pagado', cls: 'bg-green-700' }
   return { label: 'Parcial', cls: 'bg-yellow-700' }
 }
@@ -267,219 +326,257 @@ function sauces(order) {
   <AppLayout title="Pedidos">
     <template #header>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Pedidos — Edicion {{ year.year }}</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Pedidos — Edicion {{ year.year }}</h2>
         <Link
           v-if="can('pedidos.crear')"
           href="/orders/create"
-          class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm"
+          class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold"
         >
           + Nuevo pedido
         </Link>
       </div>
     </template>
 
-    <div class="py-6 max-w-7xl mx-auto px-4">
-      <div class="mb-4">
+    <div class="py-4 max-w-7xl mx-auto px-4">
+      <div class="space-y-3 mb-4">
         <YearSelector :selected-year-id="year.id" />
-      </div>
 
-      <!-- Fase 7 (correccion 4) / Fase 8 (correccion): franja compacta de
-           indicadores. Los nuevos (por retirar, retiradas, vendidas por mí)
-           son clickeables: aplican el filtro correspondiente en la tabla. -->
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2 text-sm text-gray-700">
-        <span>🍗 {{ counters.portions_total }} vendidas</span>
-        <span class="text-gray-500">·</span>
-        <span>🌶️ {{ counters.sauces_total }} salsas</span>
-        <span class="text-gray-500">·</span>
-        <button
-          class="hover:underline transition-colors"
-          :class="filters.pending_withdrawal ? 'text-orange-500 font-semibold' : ''"
-          title="Filtrar pedidos por retirar"
-          @click="filterByPendingWithdrawal"
-        >🕐 {{ counters.portions_pending_withdrawal }} por retirar</button>
-        <span class="text-gray-500">·</span>
-        <button
-          class="hover:underline transition-colors"
-          :class="filters.withdrawn ? 'text-green-500 font-semibold' : ''"
-          title="Filtrar pedidos retirados"
-          @click="filterByWithdrawn"
-        >✅ {{ counters.portions_withdrawn }} retiradas</button>
-        <span class="text-gray-500">·</span>
-        <span title="Porciones producidas (configurado en Parámetros)">📦 {{ year.made_portions ?? 0 }} producidas</span>
-        <span class="text-gray-500">·</span>
-        <button
-          class="hover:underline transition-colors"
-          :class="filters.my_sales ? 'text-blue-500 font-semibold' : ''"
-          title="Filtrar mis ventas"
-          @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
-        >👤 {{ counters.my_portions }} vendidas por mí</button>
-        <span class="text-gray-500">·</span>
-        <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver regalos">
-          🎁 {{ counters.gifts_count }}
-        </Link>
-        <span v-else title="Regalos registrados">🎁 {{ counters.gifts_count }}</span>
-        <span class="text-gray-500">·</span>
-        <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="hover:text-gray-900 hover:underline" title="Ver pérdidas">
-          🗑️ {{ counters.losses_count }}
-        </Link>
-        <span v-else title="Pérdidas registradas">🗑️ {{ counters.losses_count }}</span>
-      </div>
-
-      <!-- Fase 7 (correccion 4) / Fase 8 (correccion): recaudacion compacta, SOLO
-           con 'finanzas.ver'. Efectivo y transferencia son clickeables: filtran
-           por medio de pago (AND cuando ambos activos). -->
-      <div v-if="counters.collected" class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-sm text-gray-700">
-        <span>💰 Recaudado: <strong class="text-gray-900">{{ formatCurrency(counters.collected.total) }}</strong></span>
-        <span class="text-gray-500">·</span>
-        <button
-          class="hover:underline transition-colors"
-          :class="filters.pay_efectivo ? 'text-green-600 font-semibold' : ''"
-          title="Filtrar pedidos con pago en efectivo"
-          @click="reloadWith({ pay_efectivo: filters.pay_efectivo ? undefined : '1' })"
-        >💵 {{ formatCurrency(counters.collected.efectivo) }} efectivo</button>
-        <span class="text-gray-500">·</span>
-        <button
-          class="hover:underline transition-colors"
-          :class="filters.pay_transferencia ? 'text-blue-600 font-semibold' : ''"
-          title="Filtrar pedidos con pago en transferencia"
-          @click="reloadWith({ pay_transferencia: filters.pay_transferencia ? undefined : '1' })"
-        >🏦 {{ formatCurrency(counters.collected.banco) }} transferencia</button>
-      </div>
-      <div v-else class="mb-2"></div>
-
-      <!-- Fase 8 / Fase 9 (ampliacion): gráfico de ventas por Rover con colores
-           progresivos (rojo→verde según % de meta) y línea de meta. -->
-      <div v-if="roverRanking && roverRanking.length > 0" class="mb-4">
-        <p class="text-xs font-semibold text-gray-600 mb-1.5">📊 Ventas por Rover</p>
-        <div class="space-y-1 max-w-md">
-          <div
-            v-for="entry in roverRanking"
-            :key="entry.rover_id"
-            class="flex items-center gap-2 text-xs"
+        <!-- Fase 18 (ajuste fino): franja de métricas como chips discretos,
+             reutilizando el mismo patrón visual que los botones de filtro de
+             esta pantalla (rectangular = clickeable, redondeado/pill = solo
+             lectura, mismo radio que Badge). Los nuevos (por retirar,
+             retiradas, vendidas por mí) son clickeables: aplican el filtro
+             correspondiente en la tabla. Acento de color (maize/herb) SOLO en
+             los dos indicadores realmente operativos del día; el resto queda
+             neutro para no competir por atención. -->
+        <div class="flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300">
+            🍗 <span class="font-semibold text-white">{{ counters.portions_total }}</span> vendidas
+          </span>
+          <span class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300">
+            🌶️ <span class="font-semibold text-white">{{ counters.sauces_total }}</span> salsas
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border transition-colors"
+            :class="filters.pending_withdrawal ? 'bg-surface-3 text-white border-gray-500' : 'bg-surface text-gray-300 border-border-soft hover:bg-surface-3'"
+            title="Filtrar pedidos por retirar"
+            @click="filterByPendingWithdrawal"
           >
-            <span class="w-28 text-right text-gray-600 truncate shrink-0">{{ entry.name }}</span>
-            <!-- Contenedor externo: position relative para la línea de meta -->
-            <div class="flex-1 relative min-w-0">
-              <!-- Barra con overflow-hidden para recortar la barra coloreada -->
-              <div class="bg-gray-200 rounded h-4 overflow-hidden">
-                <div
-                  class="h-4 rounded transition-all duration-300"
-                  :style="{ width: barWidth(entry.total_portions) + '%', backgroundColor: barColor(entry.total_portions) }"
-                />
-              </div>
-              <!-- Línea de meta: fuera del overflow-hidden, sobre la barra -->
-              <div
-                v-if="goalLinePercent !== null"
-                class="absolute top-0 bottom-0 w-px bg-white opacity-80 pointer-events-none"
-                :style="{ left: goalLinePercent + '%' }"
-              />
-            </div>
-            <span class="shrink-0 text-gray-700 font-medium w-8 text-left">{{ entry.total_portions }}</span>
-          </div>
+            🕐 <span class="font-semibold text-maize">{{ counters.portions_pending_withdrawal }}</span> por retirar
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border transition-colors"
+            :class="filters.withdrawn ? 'bg-surface-3 text-white border-gray-500' : 'bg-surface text-gray-300 border-border-soft hover:bg-surface-3'"
+            title="Filtrar pedidos retirados"
+            @click="filterByWithdrawn"
+          >
+            ✅ <span class="font-semibold text-herb">{{ counters.portions_withdrawn }}</span> retiradas
+          </button>
+          <span class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Porciones producidas (configurado en Parámetros)">
+            📦 <span class="font-semibold text-white">{{ year.made_portions ?? 0 }}</span> producidas
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border transition-colors"
+            :class="filters.my_sales ? 'bg-surface-3 text-white border-gray-500' : 'bg-surface text-gray-300 border-border-soft hover:bg-surface-3'"
+            title="Filtrar mis ventas"
+            @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
+          >
+            👤 <span class="font-semibold text-white">{{ counters.my_portions }}</span> vendidas por mí
+          </button>
+          <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver regalos">
+            🎁 <span class="font-semibold text-white">{{ counters.gifts_count }}</span>
+          </Link>
+          <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Regalos registrados">
+            🎁 <span class="font-semibold text-white">{{ counters.gifts_count }}</span>
+          </span>
+          <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver pérdidas">
+            🗑️ <span class="font-semibold text-white">{{ counters.losses_count }}</span>
+          </Link>
+          <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Pérdidas registradas">
+            🗑️ <span class="font-semibold text-white">{{ counters.losses_count }}</span>
+          </span>
         </div>
-      </div>
 
-      <div class="flex flex-wrap gap-2 mb-4 items-center">
-        <div class="relative">
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Buscar cliente (nombre, apellido, telefono, N° histórico)..."
-            class="bg-gray-800 text-white border border-gray-600 rounded-md px-3 py-2 text-sm w-72"
-            @keydown.enter="applySearch"
-            @focus="showSuggestions = suggestions.length > 0"
-            @blur="() => setTimeout(() => (showSuggestions = false), 150)"
-          />
-          <!-- Fase 7 (correccion 3): sugerencias en tiempo real (sin apretar Enter),
-               mismo patron que Clients/Index.vue. -->
-          <div
-            v-if="showSuggestions && (suggestions.length || suggesting)"
-            class="absolute z-10 mt-1 w-72 bg-gray-800 border border-gray-700 rounded-md shadow-lg max-h-64 overflow-y-auto"
+        <!-- Recaudacion compacta, SOLO con 'finanzas.ver'. Efectivo y
+             transferencia son clickeables: filtran por medio de pago (AND
+             cuando ambos activos). -->
+        <div v-if="counters.collected" class="flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300">
+            💰 Recaudado <span class="font-semibold text-white">{{ formatCurrency(counters.collected.total) }}</span>
+          </span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border transition-colors"
+            :class="filters.pay_efectivo ? 'bg-surface-3 text-white border-gray-500' : 'bg-surface text-gray-300 border-border-soft hover:bg-surface-3'"
+            title="Filtrar pedidos con pago en efectivo"
+            @click="reloadWith({ pay_efectivo: filters.pay_efectivo ? undefined : '1' })"
           >
-            <div v-if="suggesting" class="px-3 py-2 text-xs text-gray-400">Buscando...</div>
-            <button
-              v-for="s in suggestions"
-              :key="s.id"
-              type="button"
-              class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-700"
-              @mousedown.prevent="pickSuggestion(s)"
+            💵 <span class="font-semibold text-white">{{ formatCurrency(counters.collected.efectivo) }}</span> efectivo
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border transition-colors"
+            :class="filters.pay_transferencia ? 'bg-surface-3 text-white border-gray-500' : 'bg-surface text-gray-300 border-border-soft hover:bg-surface-3'"
+            title="Filtrar pedidos con pago en transferencia"
+            @click="reloadWith({ pay_transferencia: filters.pay_transferencia ? undefined : '1' })"
+          >
+            🏦 <span class="font-semibold text-white">{{ formatCurrency(counters.collected.banco) }}</span> transferencia
+          </button>
+        </div>
+
+        <!-- Fase 8 / Fase 9 (ampliacion): gráfico de ventas por Rover con colores
+             progresivos (rojo→verde según % de meta) y línea de meta. El
+             degradado de la barra es un valor calculado (barColor), no un
+             color estatico, no se toca. -->
+        <div v-if="roverRanking && roverRanking.length > 0">
+          <p class="text-sm font-semibold text-gray-300 mb-1.5">📊 Ventas por Rover</p>
+          <div class="space-y-1 max-w-md">
+            <div
+              v-for="(entry, index) in roverRanking"
+              :key="entry.rover_id"
+              class="flex items-center gap-2 text-xs"
             >
-              <span class="text-gray-500 mr-1">#{{ s.historical_number ?? '—' }}</span>
-              {{ s.last_name }}, {{ s.first_name }}
-              <span class="text-gray-400 text-xs">— {{ s.phone || 'sin teléfono' }}</span>
-            </button>
-            <div v-if="!suggesting && !suggestions.length" class="px-3 py-2 text-xs text-gray-400">
-              Sin resultados.
+              <span class="w-6 text-center shrink-0">{{ rankBadge(index) }}</span>
+              <span class="w-28 text-right text-gray-300 truncate shrink-0">{{ entry.name }}</span>
+              <!-- Barra con overflow-hidden para recortar la barra coloreada. El
+                   degradado (barColor/barWidth) ya comunica el % de meta, asi
+                   que no se dibuja una linea de meta aparte (se probo y
+                   generaba ruido visual / sensacion de barra cortada). -->
+              <div class="flex-1 min-w-0">
+                <div class="bg-surface-3 rounded h-4 overflow-hidden">
+                  <div
+                    class="h-4 rounded transition-all duration-300"
+                    :style="{ width: barWidth(entry.total_portions) + '%', backgroundColor: barColor(entry.total_portions) }"
+                  />
+                </div>
+              </div>
+              <span class="shrink-0 text-white font-semibold w-8 text-left">{{ entry.total_portions }}</span>
             </div>
           </div>
         </div>
-        <button class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-md text-sm" @click="applySearch">
-          Buscar
-        </button>
 
-        <RoverFilter :rovers="rovers" :model-value="filters.rover_id ?? 'all'" />
+        <div class="flex flex-wrap gap-2 items-center">
+          <div class="relative flex-1 min-w-[14rem] max-w-xl">
+            <input
+              ref="searchInput"
+              v-model="search"
+              type="text"
+              placeholder="Buscar cliente (nombre, apellido, telefono, N° histórico)..."
+              class="w-full bg-gray-800 text-white border border-gray-600 rounded-md px-3 py-2 text-sm"
+              @keydown.enter="applySearch"
+              @focus="showSuggestions = suggestions.length > 0"
+              @blur="() => setTimeout(() => (showSuggestions = false), 150)"
+            />
+            <!-- Fase 7 (correccion 3): sugerencias en tiempo real (sin apretar Enter),
+                 mismo patron que Clients/Index.vue. -->
+            <div
+              v-if="showSuggestions && (suggestions.length || suggesting)"
+              class="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-md shadow-lg max-h-64 overflow-y-auto"
+            >
+              <div v-if="suggesting" class="px-3 py-2 text-xs text-gray-400">Buscando...</div>
+              <button
+                v-for="s in suggestions"
+                :key="s.id"
+                type="button"
+                class="block w-full text-left px-3 py-2 text-sm hover:bg-gray-700"
+                @mousedown.prevent="pickSuggestion(s)"
+              >
+                <span class="text-gray-500 mr-1">#{{ s.historical_number ?? '—' }}</span>
+                {{ s.last_name }}, {{ s.first_name }}
+                <span class="text-gray-400 text-xs">— {{ s.phone || 'sin teléfono' }}</span>
+              </button>
+              <div v-if="!suggesting && !suggestions.length" class="px-3 py-2 text-xs text-gray-400">
+                No encontramos ese cliente.
+              </div>
+            </div>
+          </div>
+          <button class="shrink-0 bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded-md text-sm" @click="applySearch">
+            Buscar
+          </button>
 
-        <select
-          class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
-          :value="filters.withdrawal_status ?? ''"
-          @change="reloadWith({ withdrawal_status: $event.target.value || undefined })"
-        >
-          <option value="">Retiro: todos</option>
-          <option value="no_retirado">No retirado</option>
-          <option value="parcial">Parcial</option>
-          <option value="retirado">Retirado</option>
-        </select>
+          <!-- Fase 18: filtros agrupados detras de este boton (se mantiene la
+               busqueda siempre visible arriba). El panel no elimina ningun
+               filtro existente, solo lo reorganiza. -->
+          <button
+            type="button"
+            class="shrink-0 px-3 py-2 rounded-md text-sm border transition-colors flex items-center gap-1.5"
+            :class="showFilters ? 'bg-gray-700 text-white border-gray-500' : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+            @click="showFilters = !showFilters"
+          >
+            <span>🔎 Filtros</span>
+            <span v-if="activeFilterCount > 0" class="bg-gray-600 text-white text-[10px] leading-none rounded-full px-1.5 py-1">{{ activeFilterCount }}</span>
+            <span class="text-[10px]">{{ showFilters ? '▲' : '▼' }}</span>
+          </button>
+        </div>
 
-        <select
-          class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
-          :value="filters.payment_status ?? ''"
-          @change="reloadWith({ payment_status: $event.target.value || undefined })"
-        >
-          <option value="">Pago: todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="parcial">Parcial</option>
-          <option value="pagado">Pagado</option>
-        </select>
+        <div v-if="showFilters" class="flex flex-wrap gap-2 items-center">
+          <RoverFilter :rovers="rovers" :model-value="filters.rover_id ?? 'all'" />
 
-        <!-- Fase 7 (correccion 4), seccion 4: filtro Delivery/Retiro para
-             organizar los recorridos del dia. take_away=true es "retira en
-             mano" y take_away=false es delivery (se respeta esa semantica
-             real, ver OrderController::index). reloadWith ya preserva el
-             resto de los filtros (año, rover, retiro, pago, busqueda). -->
-        <select
-          class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
-          :value="filters.delivery_type ?? ''"
-          @change="reloadWith({ delivery_type: $event.target.value || undefined })"
-        >
-          <option value="">Entrega: todos</option>
-          <option value="delivery">Delivery</option>
-          <option value="retiro">Retiro</option>
-        </select>
+          <select
+            class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
+            :value="filters.withdrawal_status ?? ''"
+            @change="reloadWith({ withdrawal_status: $event.target.value || undefined })"
+          >
+            <option value="">Retiro: todos</option>
+            <option value="no_retirado">No retirado</option>
+            <option value="parcial">Parcial</option>
+            <option value="retirado">Retirado</option>
+          </select>
 
-        <!-- Fase 8: filtros rápidos personales. Son toggles: activos se
-             resaltan, inactivos tienen el mismo estilo que los selects. -->
-        <button
-          class="px-3 py-2 rounded-md text-sm border transition-colors"
-          :class="filters.my_assigned_clients
-            ? 'bg-indigo-600 text-white border-indigo-500'
-            : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
-          @click="reloadWith({ my_assigned_clients: filters.my_assigned_clients ? undefined : '1' })"
-        >
-          Mis clientes asignados
-        </button>
+          <select
+            class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
+            :value="filters.payment_status ?? ''"
+            @change="reloadWith({ payment_status: $event.target.value || undefined })"
+          >
+            <option value="">Estado: todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="parcial">Parcial</option>
+            <option value="pagado">Pagado</option>
+          </select>
 
-        <!-- Fase 8 (correccion): "Mis ventas" reemplaza "Mis pedidos cargados".
-             Filtra por rover_id = auth user (mismo criterio que el indicador
-             "Vendidas por mí" y roverRanking), no por created_by. -->
-        <button
-          class="px-3 py-2 rounded-md text-sm border transition-colors"
-          :class="filters.my_sales
-            ? 'bg-purple-600 text-white border-purple-500'
-            : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
-          @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
-        >
-          Mis ventas
-        </button>
+          <!-- Fase 7 (correccion 4), seccion 4: filtro Delivery/Retiro para
+               organizar los recorridos del dia. take_away=true es "retira en
+               mano" y take_away=false es delivery (se respeta esa semantica
+               real, ver OrderController::index). reloadWith ya preserva el
+               resto de los filtros (año, rover, retiro, pago, busqueda). -->
+          <select
+            class="bg-gray-800 text-white border border-gray-600 rounded-md px-2 py-2 text-sm"
+            :value="filters.delivery_type ?? ''"
+            @change="reloadWith({ delivery_type: $event.target.value || undefined })"
+          >
+            <option value="">Entrega: todos</option>
+            <option value="delivery">Delivery</option>
+            <option value="retiro">Retiro</option>
+          </select>
+
+          <!-- Fase 8: filtros rápidos personales. Son toggles: activos se
+               resaltan, inactivos tienen el mismo estilo que los selects. -->
+          <button
+            class="px-3 py-2 rounded-md text-sm border transition-colors"
+            :class="filters.my_assigned_clients
+              ? 'bg-gray-700 text-white border-gray-500'
+              : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+            @click="reloadWith({ my_assigned_clients: filters.my_assigned_clients ? undefined : '1' })"
+          >
+            Mis clientes asignados
+          </button>
+
+          <!-- Fase 8 (correccion): "Mis ventas" reemplaza "Mis pedidos cargados".
+               Filtra por rover_id = auth user (mismo criterio que el indicador
+               "Vendidas por mí" y roverRanking), no por created_by. -->
+          <button
+            class="px-3 py-2 rounded-md text-sm border transition-colors"
+            :class="filters.my_sales
+              ? 'bg-gray-700 text-white border-gray-500'
+              : 'bg-gray-800 text-white border-gray-600 hover:bg-gray-700'"
+            @click="reloadWith({ my_sales: filters.my_sales ? undefined : '1' })"
+          >
+            Mis ventas
+          </button>
+        </div>
       </div>
 
       <!-- Acciones masivas -->
@@ -489,20 +586,20 @@ function sauces(order) {
         <!-- Fase 7, seccion 10: accion principal destacada. -->
         <button
           v-if="canRegisterPayment && canWithdraw"
-          class="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-md font-semibold"
-          @click="showPayAndWithdrawModal = true"
+          class="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded-md font-semibold"
+          @click="rememberTrigger($event); showPayAndWithdrawModal = true"
         >
           Cobrar y retirar seleccionados
         </button>
 
-        <button v-if="canAssignRover" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="showAssignModal = true">
+        <button v-if="canAssignRover" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showAssignModal = true">
           Asignar Rover
         </button>
-        <button v-if="canRegisterPayment" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-md" @click="showPayModal = true">
+        <button v-if="canRegisterPayment" class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded-md" @click="rememberTrigger($event); showPayModal = true">
           Registrar pago
         </button>
         <!-- Accion secundaria: se mantiene para casos especiales (ver seccion 10). -->
-        <button v-if="canWithdraw" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="showWithdrawModal = true">
+        <button v-if="canWithdraw" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showWithdrawModal = true">
           Marcar retirado (solo)
         </button>
       </div>
@@ -519,9 +616,9 @@ function sauces(order) {
               <th class="p-2 text-left">Porciones</th>
               <th class="p-2 text-left">Salsas</th>
               <th class="p-2 text-left">Entrega</th>
-              <th class="p-2 text-left">Importe</th>
-              <th class="p-2 text-left">Saldo</th>
-              <th class="p-2 text-left">Pago</th>
+              <th class="p-2 text-left">A cobrar</th>
+              <th class="p-2 text-left">Pendiente</th>
+              <th class="p-2 text-left">Estado</th>
               <th class="p-2 text-left">Retirado</th>
               <th class="p-2 text-left">Observaciones</th>
               <th class="p-2 text-left">Acciones</th>
@@ -608,11 +705,20 @@ function sauces(order) {
               </td>
             </tr>
             <tr v-if="!orders.data.length">
-              <td colspan="12" class="p-6 text-center text-gray-500">
-                No hay pedidos para este filtro.
-                <Link v-if="can('pedidos.crear')" href="/orders/create" class="text-blue-400 block mt-1">
-                  Crear el primer pedido
-                </Link>
+              <td colspan="12">
+                <EmptyState
+                  title="No encontramos pedidos"
+                  :description="emptyOrdersDescription"
+                >
+                  <template #icon>
+                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z" /><path d="M7 21h10" /><path d="M19.5 12 22 6" /><path d="M16.25 3c.27.1.8.53.75 1.36-.06.83-.93 1.2-1 2.02-.05.78.34 1.24.73 1.62" /><path d="M11.25 3c.27.1.8.53.74 1.36-.05.83-.93 1.2-.98 2.02-.06.78.33 1.24.72 1.62" /><path d="M6.25 3c.27.1.8.53.75 1.36-.06.83-.93 1.2-1 2.02-.05.78.34 1.24.74 1.62" /></svg>
+                  </template>
+                  <template v-if="can('pedidos.crear') && !isFiltering" #action>
+                    <Link href="/orders/create" class="text-blue-400 hover:text-blue-300 text-sm">
+                      Crear el primer pedido
+                    </Link>
+                  </template>
+                </EmptyState>
               </td>
             </tr>
           </tbody>
@@ -627,8 +733,8 @@ function sauces(order) {
           v-html="link.label"
           class="px-3 py-1 rounded-md text-sm"
           :class="[
-            link.active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700',
-            !link.url ? 'opacity-40 pointer-events-none' : 'hover:bg-gray-300',
+            link.active ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300',
+            !link.url ? 'opacity-40 pointer-events-none' : 'hover:bg-gray-700',
           ]"
         />
       </div>
@@ -638,26 +744,28 @@ function sauces(order) {
       :show="showAssignModal"
       :orders="selectedOrders"
       :rovers="rovers"
-      @close="showAssignModal = false"
+      @close="showAssignModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
     <PayOrderModal
       :show="showPayModal"
       :orders="selectedOrders"
       :payment-methods="paymentMethods"
-      @close="showPayModal = false"
+      @close="showPayModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
     <WithdrawOrderModal
       :show="showWithdrawModal"
       :orders="selectedOrders"
-      @close="showWithdrawModal = false"
+      @close="showWithdrawModal = false; returnFocus()"
       @done="onBulkActionDone"
     />
 
-    <!-- Fase 7, seccion 10: confirmacion detallada de "Cobrar y retirar". -->
-    <div v-if="showPayAndWithdrawModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div class="bg-gray-900 text-white rounded-lg p-6 max-w-lg w-full space-y-4">
+    <!-- Fase 7, seccion 10: confirmacion detallada de "Cobrar y retirar".
+         Fase 18: migrado a <Modal> (antes un <div> a mano) para que cierre
+         con Escape como el resto de los modales de la app. -->
+    <Modal :show="showPayAndWithdrawModal" max-width="lg" @close="showPayAndWithdrawModal = false; returnFocus()">
+      <div class="bg-gray-900 text-white rounded-lg p-5 space-y-4">
         <h3 class="font-semibold text-lg">Cobrar y retirar seleccionados</h3>
 
         <div class="max-h-64 overflow-y-auto divide-y divide-gray-800 text-sm">
@@ -667,7 +775,7 @@ function sauces(order) {
               <p class="text-xs text-gray-400">{{ o.total_portions }} porciones</p>
             </div>
             <p class="text-sm" :class="Number(o.balance_due) > 0 ? 'text-yellow-400' : 'text-green-400'">
-              {{ Number(o.balance_due) > 0 ? `Saldo: ${money(o.balance_due)}` : 'Sin saldo' }}
+              {{ Number(o.balance_due) > 0 ? `Pendiente: ${money(o.balance_due)}` : 'Sin pendiente' }}
             </p>
           </div>
         </div>
@@ -686,20 +794,20 @@ function sauces(order) {
         </div>
 
         <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm" @click="showPayAndWithdrawModal = false">
+          <button type="button" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm" @click="showPayAndWithdrawModal = false; returnFocus()">
             Cancelar
           </button>
           <button
             type="button"
             :disabled="payAndWithdrawBusy || !payAndWithdrawMethod"
-            class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 rounded-md text-sm font-semibold"
+            class="bg-green-600 hover:bg-green-500 disabled:opacity-50 px-3 py-1.5 rounded-md text-sm font-semibold"
             @click="confirmPayAndWithdraw"
           >
-            Confirmar
+            {{ payAndWithdrawBusy ? 'Procesando...' : 'Confirmar' }}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
 
     <ToastContainer />
   </AppLayout>

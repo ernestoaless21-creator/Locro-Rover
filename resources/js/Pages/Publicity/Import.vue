@@ -75,10 +75,10 @@ function submit() {
   <AppLayout title="Importar publicidad histórica">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('publicity.index', { team })" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('publicity.index', { team })" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Publicidad
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Importar desde otra edición</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Importar desde otra edición</h2>
       </div>
     </template>
 

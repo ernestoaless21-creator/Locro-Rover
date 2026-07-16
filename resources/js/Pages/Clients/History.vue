@@ -39,7 +39,7 @@ function money(value) {
 
   <AppLayout :title="`Historial de ${client.first_name}`">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+      <h2 class="font-semibold text-xl text-white leading-tight">
         {{ client.first_name }} {{ client.last_name }}
       </h2>
     </template>

@@ -113,20 +113,20 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
         <template #header>
             <div class="flex items-start justify-between gap-4">
                 <div>
-                    <Link :href="route('meetings.index')" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">&larr; Actas</Link>
-                    <h2 class="mt-1 font-semibold text-xl text-gray-900 leading-tight">{{ meeting.title }}</h2>
-                    <p class="text-sm text-gray-500 mt-0.5 capitalize">{{ formatDate(meeting.date) }}</p>
+                    <Link :href="route('meetings.index')" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">&larr; Actas</Link>
+                    <h2 class="mt-1 font-semibold text-xl text-white leading-tight">{{ meeting.title }}</h2>
+                    <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ formatDate(meeting.date) }}</p>
                 </div>
                 <div v-if="canManage" class="flex gap-2 shrink-0 mt-1">
                     <Link
                         :href="route('meetings.edit', meeting.id)"
-                        class="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition"
+                        class="px-3 py-1.5 text-sm text-gray-300 border border-gray-600 rounded-md hover:bg-surface-3 hover:text-white transition"
                     >
                         Editar
                     </Link>
                     <button
                         type="button"
-                        class="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-md hover:bg-red-50 transition"
+                        class="px-3 py-1.5 text-sm border border-red-800 text-red-400 rounded-md hover:bg-ember-wash transition"
                         @click="deleteMeeting"
                     >
                         Eliminar
@@ -236,7 +236,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                         </div>
                         <div class="flex justify-end gap-2">
                             <button type="button" class="text-sm text-gray-500 hover:text-gray-700" @click="showDecisionForm = false">Cancelar</button>
-                            <button type="submit" :disabled="decisionForm.processing" class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-50">Agregar</button>
+                            <button type="submit" :disabled="decisionForm.processing" class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 disabled:opacity-50">Agregar</button>
                         </div>
                     </form>
 
@@ -276,7 +276,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                                 <textarea v-model="editDecisionForm.text" rows="2" class="w-full border-gray-300 rounded text-sm" />
                                 <div class="flex gap-2 justify-end">
                                     <button type="button" class="text-xs text-gray-500" @click="editingDecisionId = null">Cancelar</button>
-                                    <button type="submit" :disabled="editDecisionForm.processing" class="text-xs px-2 py-1 bg-indigo-600 text-white rounded">Guardar</button>
+                                    <button type="submit" :disabled="editDecisionForm.processing" class="text-xs px-2 py-1 bg-green-600 text-white rounded">Guardar</button>
                                 </div>
                             </form>
                         </li>

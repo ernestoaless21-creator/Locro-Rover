@@ -336,7 +336,7 @@ function destroyDoc(doc) {
   <Head :title="`${teamLabel} — Edición ${year.year}`" />
   <AppLayout :title="`${teamLabel} — Edición ${year.year}`">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+      <h2 class="font-semibold text-xl text-white leading-tight">
         {{ teamLabel }} — Edición {{ year.year }}
       </h2>
     </template>
@@ -437,7 +437,7 @@ function destroyDoc(doc) {
           />
           <button
             type="submit"
-            class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
+            class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-500"
           >
             Agregar
           </button>
@@ -786,7 +786,7 @@ function destroyDoc(doc) {
                 <div class="flex gap-2 pt-1">
                   <button
                     type="button"
-                    class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
+                    class="px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-500"
                     @click="saveEditTask(task)"
                   >
                     Guardar cambios
@@ -805,9 +805,10 @@ function destroyDoc(doc) {
         </div>
       </div>
 
-      <p v-else class="text-center text-gray-400 py-12 text-sm">
-        No hay tareas para esta edición.
-      </p>
+      <div v-else class="text-center text-gray-400 py-12 text-sm">
+        <p class="text-2xl mb-1">✅</p>
+        <p>Todavía no hay tareas cargadas para esta edición.</p>
+      </div>
 
       <!-- ══════════ SECCIÓN DOCUMENTACIÓN ══════════════════════════════════ -->
       <div class="mt-10">
@@ -955,7 +956,7 @@ function destroyDoc(doc) {
                 <div class="flex gap-2">
                   <button
                     type="button"
-                    class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
+                    class="px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-500"
                     @click="saveEditDoc(doc)"
                   >
                     Guardar
@@ -973,9 +974,10 @@ function destroyDoc(doc) {
           </div>
         </div>
 
-        <p v-else class="text-center text-gray-400 py-8 text-sm">
-          No hay documentos para esta edición.
-        </p>
+        <div v-else class="text-center text-gray-400 py-8 text-sm">
+          <p class="text-2xl mb-1">📁</p>
+          <p>Todavía no hay documentos para esta edición.</p>
+        </div>
       </div>
 
     </div>

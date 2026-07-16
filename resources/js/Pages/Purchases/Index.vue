@@ -210,10 +210,10 @@ function submitNewCategory() {
   <AppLayout :title="`Planificación de compras — Edición ${year.year}`">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('teams.show', team)" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('teams.show', team)" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Compras
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Planificación de compras</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Planificación de compras</h2>
       </div>
     </template>
 
@@ -391,9 +391,16 @@ function submitNewCategory() {
           </template>
         </table>
 
-        <p v-if="filteredItems.length === 0" class="text-center text-gray-400 py-10 text-sm">
-          {{ items.length === 0 ? 'No hay productos planificados para esta edición.' : 'No se encontraron productos.' }}
-        </p>
+        <div v-if="filteredItems.length === 0" class="text-center text-gray-400 py-10 text-sm">
+          <template v-if="items.length === 0">
+            <p class="text-2xl mb-1">🛒</p>
+            <p>Todavía no hay productos planificados para esta edición.</p>
+          </template>
+          <template v-else>
+            <p class="text-2xl mb-1">🔎</p>
+            <p>No se encontraron productos.</p>
+          </template>
+        </div>
       </div>
 
       <!-- Agregar producto -->
@@ -474,7 +481,7 @@ function submitNewCategory() {
                 @keydown.enter.prevent="submitNewCategory" />
               <p v-if="newCategoryForm.errors.name" class="text-xs text-red-600 mt-1">{{ newCategoryForm.errors.name }}</p>
             </div>
-            <button type="button" class="px-3 py-1.5 bg-gray-700 text-white text-xs rounded-lg hover:bg-gray-800"
+            <button type="button" class="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500"
               @click="submitNewCategory">
               Crear
             </button>
@@ -521,7 +528,7 @@ function submitNewCategory() {
 
           <div class="flex gap-2 pt-1">
             <button type="button" :disabled="newItemForm.processing" @click="submitNewItem"
-              class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+              class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50">
               Agregar
             </button>
             <button type="button" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900" @click="showNewItem = false">
@@ -575,7 +582,7 @@ function submitNewCategory() {
               Cancelar
             </button>
             <button type="button" :disabled="editProductForm.processing || !editProductForm.name.trim()"
-              class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-500 disabled:opacity-50"
               @click="submitEditProduct">
               Guardar
             </button>

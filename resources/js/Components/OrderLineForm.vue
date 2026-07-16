@@ -16,6 +16,7 @@ import axios from 'axios'
 const props = defineProps({
   yearId: { type: Number, required: true },
   initial: { type: Object, default: null }, // para editar una linea existente
+  disabled: { type: Boolean, default: false }, // true mientras el padre esta guardando (evita doble click)
 })
 
 const emit = defineEmits(['submit', 'cancel'])
@@ -160,8 +161,8 @@ function money(value) {
         </button>
         <button
           type="button"
-          class="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 px-3 py-1 rounded-md text-sm"
-          :disabled="!preview || previewing"
+          class="bg-green-600 hover:bg-green-500 disabled:opacity-40 px-3 py-1 rounded-md text-sm"
+          :disabled="!preview || previewing || disabled"
           @click="submit"
         >
           {{ initial ? 'Guardar cambios' : '+ Agregar excepcion' }}

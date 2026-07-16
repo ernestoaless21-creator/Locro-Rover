@@ -162,7 +162,7 @@ const cancelHref = computed(() =>
   <Head title="Importar tareas" />
   <AppLayout title="Importar tareas">
     <template #header>
-      <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+      <h2 class="font-semibold text-xl text-white leading-tight">
         Importar tareas — Edición {{ targetYear.year }}
         <span v-if="preselectedTeam" class="text-gray-400 font-normal text-lg">
           · {{ TEAM_LABELS[preselectedTeam] ?? preselectedTeam }}

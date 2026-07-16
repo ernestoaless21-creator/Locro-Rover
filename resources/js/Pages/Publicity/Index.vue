@@ -143,10 +143,10 @@ function destroyMaterial(m) {
   <AppLayout :title="`Publicidad — Edición ${year.year}`">
     <template #header>
       <div class="flex items-center gap-4">
-        <a :href="route('teams.show', team)" class="text-xs text-indigo-600 hover:text-indigo-800 uppercase tracking-wide">
+        <a :href="route('teams.show', team)" class="text-xs text-ember hover:text-ember-strong uppercase tracking-wide">
           ← Publicidad
         </a>
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Publicidad histórica</h2>
+        <h2 class="font-semibold text-xl text-white leading-tight">Publicidad histórica</h2>
       </div>
     </template>
 
@@ -220,7 +220,7 @@ function destroyMaterial(m) {
                 @keydown.enter.prevent="submitNewCategory" />
               <p v-if="newCategoryForm.errors.name" class="text-xs text-red-600 mt-1">{{ newCategoryForm.errors.name }}</p>
             </div>
-            <button type="button" class="px-3 py-1.5 bg-gray-700 text-white text-xs rounded-lg hover:bg-gray-800" @click="submitNewCategory">
+            <button type="button" class="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-500" @click="submitNewCategory">
               Crear
             </button>
           </div>
@@ -247,7 +247,7 @@ function destroyMaterial(m) {
 
           <div class="flex gap-2 pt-1">
             <button type="button" :disabled="uploadForm.processing || !uploadForm.file" @click="submitUpload"
-              class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              class="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed">
               {{ uploadForm.processing ? 'Subiendo...' : 'Subir material' }}
             </button>
             <button type="button" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200"
@@ -342,7 +342,7 @@ function destroyMaterial(m) {
                 <p v-if="editForm.errors.file" class="text-xs text-red-600 mt-1">{{ editForm.errors.file }}</p>
               </div>
               <div class="flex gap-2">
-                <button type="button" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700" @click="saveEdit(m)">
+                <button type="button" class="px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-500" @click="saveEdit(m)">
                   Guardar
                 </button>
                 <button type="button" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200" @click="cancelEdit">
@@ -354,9 +354,16 @@ function destroyMaterial(m) {
         </div>
       </div>
 
-      <p v-else class="text-center text-gray-400 py-12 text-sm">
-        {{ materials.length === 0 ? 'No hay material publicitario para esta edición.' : 'No se encontró material con ese filtro.' }}
-      </p>
+      <div v-else class="text-center text-gray-400 py-12 text-sm">
+        <template v-if="materials.length === 0">
+          <p class="text-2xl mb-1">📣</p>
+          <p>Todavía no hay material publicitario para esta edición.</p>
+        </template>
+        <template v-else>
+          <p class="text-2xl mb-1">🔎</p>
+          <p>No se encontró material con ese filtro.</p>
+        </template>
+      </div>
 
     </div>
   </AppLayout>
