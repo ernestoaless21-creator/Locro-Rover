@@ -18,6 +18,9 @@ use App\Http\Controllers\InfrastructureImportController;
 use App\Http\Controllers\InfrastructureInventoryController;
 use App\Http\Controllers\InfrastructureItemController;
 use App\Http\Controllers\InfrastructureLoanController;
+use App\Http\Controllers\PublicityCategoryController;
+use App\Http\Controllers\PublicityImportController;
+use App\Http\Controllers\PublicityMaterialController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchasePlanImportController;
 use App\Http\Controllers\PurchasePlanItemController;
@@ -382,5 +385,23 @@ Route::middleware([
             Route::delete('/loans/{loan}', [InfrastructureLoanController::class, 'destroy'])->name('infrastructure.loans.destroy');
             Route::get('/import', [InfrastructureImportController::class, 'create'])->name('infrastructure.import');
             Route::post('/import', [InfrastructureImportController::class, 'store'])->name('infrastructure.import.store');
+        });
+
+    // Fase 16: publicidad historica (archivo de material publicitario por
+    // edicion). Mismo esquema de permisos que Documentacion (Fase 11):
+    // 'tareas.ver' / 'tareas.gestionar-propio-equipo' + authorizeTeamAccess,
+    // no atado a un ID de equipo (solo al slug 'publicidad' en la ruta).
+    Route::prefix('teams/{team}/publicity')
+        ->where(['team' => 'publicidad'])
+        ->group(function () {
+            Route::get('/', [PublicityMaterialController::class, 'index'])->name('publicity.index');
+            Route::post('/', [PublicityMaterialController::class, 'store'])->name('publicity.store');
+            Route::put('/{material}', [PublicityMaterialController::class, 'update'])->name('publicity.update');
+            Route::delete('/{material}', [PublicityMaterialController::class, 'destroy'])->name('publicity.destroy');
+            Route::get('/{material}/download', [PublicityMaterialController::class, 'download'])->name('publicity.download');
+            Route::get('/{material}/view', [PublicityMaterialController::class, 'view'])->name('publicity.view');
+            Route::post('/categories', [PublicityCategoryController::class, 'store'])->name('publicity.categories.store');
+            Route::get('/import', [PublicityImportController::class, 'create'])->name('publicity.import');
+            Route::post('/import', [PublicityImportController::class, 'store'])->name('publicity.import.store');
         });
 });
