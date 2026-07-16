@@ -394,6 +394,17 @@ function destroyDoc(doc) {
         </a>
       </div>
 
+      <!-- Fase 17: acceso a logística histórica (solo ese equipo) -->
+      <div v-if="team === 'logistica'" class="mb-6 flex flex-wrap gap-3">
+        <a
+          :href="route('logistics.index', { team, year_id: year.id })"
+          class="flex-1 min-w-[220px] bg-white rounded-lg shadow-sm border border-gray-100 px-4 py-3 hover:border-indigo-200 hover:shadow transition"
+        >
+          <p class="text-sm font-semibold text-gray-800">🚚 Logística histórica</p>
+          <p class="text-xs text-gray-400 mt-0.5">Recorridos, mapas, exportaciones y listados archivados por edición</p>
+        </a>
+      </div>
+
       <!-- Encabezado del checklist -->
       <div class="mb-4 flex items-center justify-between gap-4">
         <h3 class="font-semibold text-gray-700 shrink-0">Checklist de tareas</h3>

@@ -18,6 +18,9 @@ use App\Http\Controllers\InfrastructureImportController;
 use App\Http\Controllers\InfrastructureInventoryController;
 use App\Http\Controllers\InfrastructureItemController;
 use App\Http\Controllers\InfrastructureLoanController;
+use App\Http\Controllers\LogisticsCategoryController;
+use App\Http\Controllers\LogisticsImportController;
+use App\Http\Controllers\LogisticsRecordController;
 use App\Http\Controllers\PublicityCategoryController;
 use App\Http\Controllers\PublicityImportController;
 use App\Http\Controllers\PublicityMaterialController;
@@ -403,5 +406,24 @@ Route::middleware([
             Route::post('/categories', [PublicityCategoryController::class, 'store'])->name('publicity.categories.store');
             Route::get('/import', [PublicityImportController::class, 'create'])->name('publicity.import');
             Route::post('/import', [PublicityImportController::class, 'store'])->name('publicity.import.store');
+        });
+
+    // Fase 17: logistica historica (archivo de recorridos, mapas,
+    // exportaciones y listados por edicion). Mismo esquema de permisos que
+    // Documentacion/Publicidad: 'tareas.ver' / 'tareas.gestionar-propio-equipo'
+    // + authorizeTeamAccess, no atado a un ID de equipo (solo al slug
+    // 'logistica' en la ruta).
+    Route::prefix('teams/{team}/logistics')
+        ->where(['team' => 'logistica'])
+        ->group(function () {
+            Route::get('/', [LogisticsRecordController::class, 'index'])->name('logistics.index');
+            Route::post('/', [LogisticsRecordController::class, 'store'])->name('logistics.store');
+            Route::put('/{record}', [LogisticsRecordController::class, 'update'])->name('logistics.update');
+            Route::delete('/{record}', [LogisticsRecordController::class, 'destroy'])->name('logistics.destroy');
+            Route::get('/{record}/download', [LogisticsRecordController::class, 'download'])->name('logistics.download');
+            Route::get('/{record}/view', [LogisticsRecordController::class, 'view'])->name('logistics.view');
+            Route::post('/categories', [LogisticsCategoryController::class, 'store'])->name('logistics.categories.store');
+            Route::get('/import', [LogisticsImportController::class, 'create'])->name('logistics.import');
+            Route::post('/import', [LogisticsImportController::class, 'store'])->name('logistics.import.store');
         });
 });
