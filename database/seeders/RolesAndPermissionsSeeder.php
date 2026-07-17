@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use Illuminate\Support\Facades\Hash;
 use App\Models\PaymentMethod;
 use App\Models\User;
 use App\Models\Year;
@@ -235,5 +236,13 @@ class RolesAndPermissionsSeeder extends Seeder
             ['year' => $currentYear],
             ['label' => "Locro {$currentYear}", 'is_active' => true, 'event_type' => 'locro']
         );
+
+        $adminUser = User::firstOrCreate(['email' => 'ernes@locro.local'],
+        ['name' => 'Ernesto',
+        'password' => Hash::make('Locro2026!'),
+        'is_active' => true,]
+        );
+
+$adminUser->assignRole('admin');
     }
 }
