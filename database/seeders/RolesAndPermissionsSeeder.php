@@ -237,11 +237,10 @@ class RolesAndPermissionsSeeder extends Seeder
             ['label' => "Locro {$currentYear}", 'is_active' => true, 'event_type' => 'locro']
         );
 
-        $adminUser = User::firstOrCreate(['email' => 'ernes@locro.local'],
-        ['name' => 'Ernesto',
-        'password' => Hash::make('Locro2026!'),
-        'is_active' => true,]
-        );
+        $adminUser = User::firstOrCreate(['email' => env('ADMIN_EMAIL')],
+        ['name' => env('ADMIN_NAME', 'Administrador'),
+        'password' => Hash::make(env('ADMIN_PASSWORD')),
+        'is_active' => true,]);
 
 $adminUser->assignRole('admin');
     }
