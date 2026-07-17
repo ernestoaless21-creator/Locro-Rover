@@ -19,13 +19,13 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Locro App" />
+    <Head title="Locro Rover" />
 
     <div class="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-16">
         <div class="fade-in-up flex flex-col items-center text-center max-w-md">
             <ApplicationMark class="h-20 w-auto rounded-lg mb-6" />
 
-            <h1 class="text-3xl font-bold text-white tracking-tight">Locro App</h1>
+            <h1 class="text-3xl font-bold text-white tracking-tight">Locro Rover</h1>
             <p class="text-gray-400 font-semibold text-sm tracking-wide mt-2">Memoria Histórica del Locro</p>
 
             <p class="text-gray-400 text-sm leading-relaxed mt-4">
