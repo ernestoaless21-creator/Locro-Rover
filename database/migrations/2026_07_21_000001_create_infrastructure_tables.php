@@ -47,7 +47,10 @@ return new class extends Migration
             $table->foreignId('created_by')->constrained('users')->restrictOnDelete();
             $table->timestamps();
 
-            $table->unique(['year_id', 'infrastructure_item_id']);
+            $table->unique(
+    ['year_id', 'infrastructure_item_id'],
+    'inventory_unique'
+);
         });
 
         Schema::create('infrastructure_loans', function (Blueprint $table) {
