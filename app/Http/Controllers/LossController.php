@@ -45,6 +45,8 @@ class LossController extends Controller
 
     public function store(StoreLossRequest $request): RedirectResponse|JsonResponse
     {
+        Gate::authorize('mutate', Year::findOrFail($request->validated('year_id')));
+
         $loss = Loss::create([
             ...$request->validated(),
             'created_by' => $request->user()->id,
@@ -59,6 +61,8 @@ class LossController extends Controller
 
     public function update(UpdateLossRequest $request, Loss $loss): RedirectResponse|JsonResponse
     {
+        Gate::authorize('mutate', $loss->year);
+
         $loss->update($request->validated());
 
         if ($request->wantsJson()) {
@@ -71,6 +75,7 @@ class LossController extends Controller
     public function destroy(Request $request, Loss $loss): RedirectResponse
     {
         Gate::authorize('perdidas.gestionar');
+        Gate::authorize('mutate', $loss->year);
 
         $loss->delete();
 

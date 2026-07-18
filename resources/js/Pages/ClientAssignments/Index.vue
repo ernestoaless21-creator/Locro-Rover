@@ -11,7 +11,9 @@ import { Head, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   assignments: { type: Object, required: true },
@@ -28,6 +30,7 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const canMutateYear = useEditableYear(() => props.year)
 
 const search = ref(props.filters.search || '')
 const assignedUserId = ref(props.filters.assigned_user_id || '')
@@ -203,6 +206,8 @@ function exportUrl() {
     </template>
 
     <div class="py-6 max-w-7xl mx-auto px-4 space-y-4">
+      <HistoricalEditionBanner :year="year" />
+
       <!-- Busqueda principal (siempre visible) + filtros avanzados colapsables -->
       <div class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap gap-3 items-end">
         <div>
@@ -250,7 +255,7 @@ function exportUrl() {
       </div>
 
       <!-- Acciones masivas -->
-      <div v-if="canBulk && selected.length" class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap items-end gap-3">
+      <div v-if="canBulk && canMutateYear && selected.length" class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap items-end gap-3">
         <span class="text-sm text-gray-400">{{ selected.length }} seleccionados</span>
         <div>
           <label class="text-xs text-gray-400 block mb-1">Asignar todos a</label>
@@ -299,11 +304,11 @@ function exportUrl() {
               <td class="p-2">
                 <span v-if="a.assigned_user" class="mr-1">{{ a.assigned_user.name }}</span>
                 <span v-else class="text-yellow-400 mr-1">Sin asignar</span>
-                <button v-if="!a.assigned_user" type="button" class="text-blue-400 hover:underline text-xs" @click="selfAssign(a)">
+                <button v-if="!a.assigned_user && canMutateYear" type="button" class="text-blue-400 hover:underline text-xs" @click="selfAssign(a)">
                   Autoasignarme
                 </button>
                 <select
-                  v-if="canTransfer"
+                  v-if="canTransfer && canMutateYear"
                   class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs ml-1"
                   :value="''"
                   @change="transfer(a, $event.target.value); $event.target.value = ''"
@@ -314,7 +319,8 @@ function exportUrl() {
               </td>
               <td class="p-2">
                 <select
-                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs"
+                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs disabled:opacity-50"
+                  :disabled="!canMutateYear"
                   :value="a.contact_status"
                   @change="updateContact(a, { contact_status: $event.target.value })"
                 >
@@ -328,7 +334,8 @@ function exportUrl() {
               <td class="p-2">
                 <input
                   type="text"
-                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs w-40"
+                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs w-40 disabled:opacity-50"
+                  :disabled="!canMutateYear"
                   :value="a.notes"
                   @change="updateContact(a, { notes: $event.target.value })"
                   placeholder="Observación..."

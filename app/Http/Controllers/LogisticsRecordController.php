@@ -43,11 +43,11 @@ class LogisticsRecordController extends Controller
             ->get();
 
         return Inertia::render('Logistics/Index', [
-            'team'       => $team,
-            'year'       => $year->only('id', 'year', 'label'),
-            'records'    => $records,
+            'team' => $team,
+            'year' => $year->only('id', 'year', 'label'),
+            'records' => $records,
             'categories' => LogisticsCategory::orderBy('name')->get(),
-            'canManage'  => $request->user()->can('tareas.gestionar-propio-equipo'),
+            'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
         ]);
     }
 
@@ -61,17 +61,18 @@ class LogisticsRecordController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $this->recordService->store(
-            file:        $request->file('file'),
-            yearId:      $year->id,
-            categoryId:  $data['logistics_category_id'],
-            title:       $data['title'],
+            file: $request->file('file'),
+            yearId: $year->id,
+            categoryId: $data['logistics_category_id'],
+            title: $data['title'],
             description: $data['description'] ?? null,
-            purpose:     $data['purpose'] ?? null,
-            notes:       $data['notes'] ?? null,
-            recordDate:  $data['record_date'] ?? null,
-            uploadedBy:  $request->user()->id,
+            purpose: $data['purpose'] ?? null,
+            notes: $data['notes'] ?? null,
+            recordDate: $data['record_date'] ?? null,
+            uploadedBy: $request->user()->id,
         );
 
         return back()->with('success', 'Material subido.');
@@ -81,6 +82,7 @@ class LogisticsRecordController extends Controller
     {
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
+        Gate::authorize('mutate', $record->year);
 
         $data = $request->validated();
         unset($data['file']);
@@ -94,6 +96,7 @@ class LogisticsRecordController extends Controller
     {
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
+        Gate::authorize('mutate', $record->year);
 
         $this->recordService->delete($record);
 

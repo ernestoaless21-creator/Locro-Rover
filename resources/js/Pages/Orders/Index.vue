@@ -24,7 +24,9 @@ import PayOrderModal from '@/Components/PayOrderModal.vue'
 import WithdrawOrderModal from '@/Components/WithdrawOrderModal.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import EmptyState from '@/Components/EmptyState.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   orders: { type: Array, required: true },
@@ -35,12 +37,18 @@ const props = defineProps({
   canAssignRover: { type: Boolean, default: false },
   canRegisterPayment: { type: Boolean, default: false },
   canWithdraw: { type: Boolean, default: false },
-  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, gifts_count: 0, losses_count: 0, portions_pending_withdrawal: 0, portions_withdrawn: 0 }) },
+  counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, portions_pending_withdrawal: 0, portions_withdrawn: 0 }) },
   canManageGifts: { type: Boolean, default: false },
   canManageLosses: { type: Boolean, default: false },
   // Fase 8: ranking de porciones por Rover. null = usuario sin permiso ver-todos.
   roverRanking: { type: Array, default: null },
 })
+
+// Fase 19: una edicion que no es la activa es de solo lectura para quien no
+// tiene 'anios.gestionar' (ver Composables/useEditableYear.js). Como esta
+// pantalla siempre filtra por UNA edicion (props.year), alcanza con un solo
+// computed para gatear todas las acciones de creacion/edicion/eliminacion.
+const canMutateYear = useEditableYear(() => props.year)
 
 // Fase 7 (correccion 4), seccion 3: formato de moneda compacto para la franja
 // de recaudacion (visible solo si counters.collected viene en el payload, es
@@ -379,6 +387,7 @@ function sauces(order) {
     <div class="py-4 max-w-7xl mx-auto px-4">
       <div class="space-y-3 mb-4">
         <YearSelector :selected-year-id="year.id" />
+        <HistoricalEditionBanner :year="year" />
 
         <!-- Fase 18 (ajuste fino): franja de métricas como chips discretos,
              reutilizando el mismo patrón visual que los botones de filtro de
@@ -425,18 +434,22 @@ function sauces(order) {
           >
             👤 <span class="font-semibold text-white">{{ counters.my_portions }}</span> vendidas por mí
           </button>
-          <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver regalos">
-            🎁 <span class="font-semibold text-white">{{ counters.gifts_count }}</span>
-          </Link>
-          <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Regalos registrados">
-            🎁 <span class="font-semibold text-white">{{ counters.gifts_count }}</span>
-          </span>
-          <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver pérdidas">
-            🗑️ <span class="font-semibold text-white">{{ counters.losses_count }}</span>
-          </Link>
-          <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Pérdidas registradas">
-            🗑️ <span class="font-semibold text-white">{{ counters.losses_count }}</span>
-          </span>
+          <template v-if="counters.gifted_portions !== undefined">
+            <Link v-if="canManageGifts" :href="`/gifts?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver regalos">
+              🎁 <span class="font-semibold text-white">{{ counters.gifted_portions }}</span>
+            </Link>
+            <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Porciones regaladas">
+              🎁 <span class="font-semibold text-white">{{ counters.gifted_portions }}</span>
+            </span>
+          </template>
+          <template v-if="counters.lost_portions !== undefined">
+            <Link v-if="canManageLosses" :href="`/losses?year_id=${year.id}`" class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300 hover:text-white hover:border-gray-500" title="Ver pérdidas">
+              🗑️ <span class="font-semibold text-white">{{ counters.lost_portions }}</span>
+            </Link>
+            <span v-else class="inline-flex items-center gap-1 bg-surface border border-border-soft rounded-full px-1.5 py-0.5 text-xs font-medium text-gray-300" title="Porciones perdidas">
+              🗑️ <span class="font-semibold text-white">{{ counters.lost_portions }}</span>
+            </span>
+          </template>
         </div>
 
         <!-- Recaudacion compacta, SOLO con 'finanzas.ver'. Efectivo y
@@ -632,21 +645,21 @@ function sauces(order) {
 
         <!-- Fase 7, seccion 10: accion principal destacada. -->
         <button
-          v-if="canRegisterPayment && canWithdraw"
+          v-if="canRegisterPayment && canWithdraw && canMutateYear"
           class="bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded-md font-semibold"
           @click="rememberTrigger($event); showPayAndWithdrawModal = true"
         >
           Cobrar y retirar seleccionados
         </button>
 
-        <button v-if="canAssignRover" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showAssignModal = true">
+        <button v-if="canAssignRover && canMutateYear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showAssignModal = true">
           Asignar Rover
         </button>
-        <button v-if="canRegisterPayment" class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded-md" @click="rememberTrigger($event); showPayModal = true">
+        <button v-if="canRegisterPayment && canMutateYear" class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded-md" @click="rememberTrigger($event); showPayModal = true">
           Registrar pago
         </button>
         <!-- Accion secundaria: se mantiene para casos especiales (ver seccion 10). -->
-        <button v-if="canWithdraw" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showWithdrawModal = true">
+        <button v-if="canWithdraw && canMutateYear" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md" @click="rememberTrigger($event); showWithdrawModal = true">
           Marcar retirado (solo)
         </button>
       </div>
@@ -732,7 +745,7 @@ function sauces(order) {
                 <div class="flex items-center gap-1.5">
                   <input
                     type="checkbox"
-                    :disabled="!canWithdraw || withdrawBusyIds.has(order.id)"
+                    :disabled="!canWithdraw || !canMutateYear || withdrawBusyIds.has(order.id)"
                     :checked="order.withdrawal_status === 'retirado'"
                     @change="toggleWithdrawn(order, $event.target.checked)"
                   />
@@ -747,7 +760,8 @@ function sauces(order) {
                   type="text"
                   :value="order.observations"
                   placeholder="Ej: retira la hermana..."
-                  class="bg-gray-800 border border-gray-600 rounded-md px-1.5 py-1 text-xs w-full"
+                  class="bg-gray-800 border border-gray-600 rounded-md px-1.5 py-1 text-xs w-full disabled:opacity-50"
+                  :disabled="!canMutateYear"
                   @change="saveObservations(order, $event.target.value)"
                 />
                 <!-- Fase 7 (correccion 2), seccion 3: nota de seguimiento del
@@ -766,12 +780,13 @@ function sauces(order) {
                      OrderPolicy::update); se oculta el link para los ajenos
                      en vez de dejar que llegue a un 403. -->
                 <Link
-                  v-if="canAssignRover || order.rover_id === page.props.auth.user.id"
+                  v-if="(canAssignRover || order.rover_id === page.props.auth.user.id) && canMutateYear"
                   :href="`/orders/${order.id}/edit`"
                   class="text-blue-400 hover:text-blue-300"
                 >
                   Editar
                 </Link>
+                <span v-else-if="!canMutateYear" class="text-gray-600 text-xs" title="Edición histórica de solo lectura">🔒</span>
                 <span v-else class="text-gray-600 text-xs">—</span>
               </td>
             </tr>

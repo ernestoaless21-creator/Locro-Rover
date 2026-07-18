@@ -2,11 +2,16 @@
 import { reactive, ref, computed } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
     meeting:     Object,
+    year:        Object,
     activeUsers: Array,
 })
+
+const canMutateYear = useEditableYear(() => props.year)
 
 const form = useForm({
     title:            props.meeting.title,
@@ -70,7 +75,8 @@ function submit() {
         </template>
 
         <div class="py-8">
-            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+                <HistoricalEditionBanner :year="year" />
                 <form
                     class="bg-white shadow-sm border border-gray-200 rounded-lg divide-y divide-gray-100"
                     @submit.prevent="submit"
@@ -181,7 +187,7 @@ function submit() {
                         <a :href="route('meetings.show', meeting.id)" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
                         <button
                             type="submit"
-                            :disabled="form.processing"
+                            :disabled="form.processing || !canMutateYear"
                             class="px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 transition"
                         >
                             Guardar cambios

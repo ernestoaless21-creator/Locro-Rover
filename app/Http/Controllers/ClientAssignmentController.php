@@ -8,6 +8,7 @@ use App\Http\Requests\GenerateAssignmentsRequest;
 use App\Http\Requests\TransferClientAssignmentRequest;
 use App\Http\Requests\UpdateClientAssignmentContactRequest;
 use App\Models\ClientAssignment;
+use App\Models\Order;
 use App\Models\User;
 use App\Models\Year;
 use App\Services\ClientAssignmentService;
@@ -19,6 +20,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Fase 6A. Asignaciones anuales de clientes / call center: quien es
@@ -74,6 +76,8 @@ class ClientAssignmentController extends Controller
      */
     public function updateContact(UpdateClientAssignmentContactRequest $request, ClientAssignment $assignment): RedirectResponse|JsonResponse
     {
+        Gate::authorize('mutate', $assignment->year);
+
         $data = $request->validated();
         $markContactedNow = (bool) ($data['mark_contacted_now'] ?? true);
         unset($data['mark_contacted_now']);
@@ -102,6 +106,7 @@ class ClientAssignmentController extends Controller
     public function selfAssign(Request $request, ClientAssignment $assignment, ClientAssignmentService $assignments): RedirectResponse
     {
         Gate::authorize('selfAssign', $assignment);
+        Gate::authorize('mutate', $assignment->year);
 
         $assignments->syncResponsibleForClientYear($assignment->client_id, $assignment->year_id, $request->user()->id, $request->user()->id);
 
@@ -114,6 +119,8 @@ class ClientAssignmentController extends Controller
      */
     public function transfer(TransferClientAssignmentRequest $request, ClientAssignment $assignment, ClientAssignmentService $assignments): RedirectResponse
     {
+        Gate::authorize('mutate', $assignment->year);
+
         $assignments->syncResponsibleForClientYear(
             $assignment->client_id,
             $assignment->year_id,
@@ -129,6 +136,8 @@ class ClientAssignmentController extends Controller
      */
     public function bulkAssign(BulkAssignClientAssignmentsRequest $request, ClientAssignmentService $service): JsonResponse
     {
+        $this->authorizeMutableAssignments($request->validated('assignment_ids'));
+
         $result = $service->bulkAssign(
             $request->validated('assignment_ids'),
             (int) $request->validated('assigned_user_id'),
@@ -143,6 +152,8 @@ class ClientAssignmentController extends Controller
      */
     public function bulkDistribute(BulkDistributeClientAssignmentsRequest $request, ClientAssignmentService $service): JsonResponse
     {
+        $this->authorizeMutableAssignments($request->validated('assignment_ids'));
+
         $result = $service->bulkDistribute(
             $request->validated('assignment_ids'),
             $request->validated('user_ids'),
@@ -150,6 +161,29 @@ class ClientAssignmentController extends Controller
         );
 
         return response()->json($result);
+    }
+
+    /**
+     * Fase 19: las acciones masivas reciben una lista de IDs que, en teoria,
+     * podrian mezclar asignaciones de distintas ediciones (no hay nada que lo
+     * impida a nivel de request). Se resuelven todos los años involucrados
+     * (sin duplicados) y se autoriza cada uno con la misma regla centralizada
+     * -- si UNA sola asignacion pertenece a una edicion no editable para este
+     * usuario, toda la accion masiva se rechaza antes de tocar nada.
+     */
+    private function authorizeMutableAssignments(array $assignmentIds): void
+    {
+        $years = ClientAssignment::query()
+            ->whereIn('id', $assignmentIds)
+            ->with('year')
+            ->get()
+            ->pluck('year')
+            ->filter()
+            ->unique('id');
+
+        foreach ($years as $year) {
+            Gate::authorize('mutate', $year);
+        }
     }
 
     /**
@@ -193,7 +227,7 @@ class ClientAssignmentController extends Controller
      * no estaba instalada en el proyecto, ver README de esta fase para el
      * comando exacto a correr).
      */
-    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function export(Request $request): StreamedResponse
     {
         Gate::authorize('export', ClientAssignment::class);
 
@@ -209,7 +243,7 @@ class ClientAssignmentController extends Controller
         // (ver migracion 2026_07_15_000002), se garantiza aca mismo que TODO
         // cliente con al menos un pedido de esta edicion tenga su asignacion,
         // para que ninguna via futura pueda volver a producir el mismo hueco.
-        $clientIdsWithOrders = \App\Models\Order::query()
+        $clientIdsWithOrders = Order::query()
             ->where('year_id', $year->id)
             ->pluck('client_id')
             ->unique();
@@ -238,7 +272,7 @@ class ClientAssignmentController extends Controller
 
         // Pedidos NO cancelados de estos clientes en esta edicion, para las
         // columnas "Compro" y "Cantidad de porciones" (y $ si corresponde).
-        $orders = \App\Models\Order::query()
+        $orders = Order::query()
             ->where('year_id', $year->id)
             ->where('status', '!=', 'cancelado')
             ->whereIn('client_id', $assignments->pluck('client_id'))

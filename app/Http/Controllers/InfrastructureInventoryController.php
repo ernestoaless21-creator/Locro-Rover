@@ -42,52 +42,52 @@ class InfrastructureInventoryController extends Controller
 
         $inventoryRows = $inventoryItems->map(function (InfrastructureInventoryItem $inv) use ($activeLoansByItem) {
             $activeLoans = $activeLoansByItem[$inv->infrastructure_item_id] ?? 0;
-            $ownUseful   = $inv->own_useful_quantity;
+            $ownUseful = $inv->own_useful_quantity;
             $totalUseful = $ownUseful + $activeLoans;
-            $needed      = $inv->needed_quantity;
+            $needed = $inv->needed_quantity;
 
             if ($totalUseful > $needed) {
                 $status = 'surplus';
-                $diff   = $totalUseful - $needed;
+                $diff = $totalUseful - $needed;
             } elseif ($totalUseful < $needed) {
                 $status = 'missing';
-                $diff   = $needed - $totalUseful;
+                $diff = $needed - $totalUseful;
             } else {
                 $status = 'complete';
-                $diff   = 0;
+                $diff = 0;
             }
 
             return [
-                'id'                      => $inv->id,
-                'infrastructure_item_id'  => $inv->infrastructure_item_id,
-                'item'                    => $inv->item,
-                'needed_quantity'         => $needed,
-                'own_available_quantity'  => $inv->own_available_quantity,
-                'own_to_repair_quantity'  => $inv->own_to_repair_quantity,
-                'own_useful_quantity'     => $ownUseful,
-                'active_loans_quantity'   => $activeLoans,
-                'total_useful_quantity'   => $totalUseful,
-                'status'                  => $status,
-                'diff_quantity'           => $diff,
-                'notes'                   => $inv->notes,
+                'id' => $inv->id,
+                'infrastructure_item_id' => $inv->infrastructure_item_id,
+                'item' => $inv->item,
+                'needed_quantity' => $needed,
+                'own_available_quantity' => $inv->own_available_quantity,
+                'own_to_repair_quantity' => $inv->own_to_repair_quantity,
+                'own_useful_quantity' => $ownUseful,
+                'active_loans_quantity' => $activeLoans,
+                'total_useful_quantity' => $totalUseful,
+                'status' => $status,
+                'diff_quantity' => $diff,
+                'notes' => $inv->notes,
             ];
         })->values();
 
         $loanSummary = [
-            'active_count'    => $loans->where('status', 'pending')->count(),
-            'active_units'    => (int) $loans->where('status', 'pending')->sum('quantity'),
+            'active_count' => $loans->where('status', 'pending')->count(),
+            'active_units' => (int) $loans->where('status', 'pending')->sum('quantity'),
             'pending_lenders' => $loans->where('status', 'pending')->pluck('lender')->unique()->count(),
-            'returned_count'  => $loans->where('status', 'returned')->count(),
+            'returned_count' => $loans->where('status', 'returned')->count(),
         ];
 
         return Inertia::render('Infrastructure/Index', [
-            'team'          => $team,
-            'year'          => $year->only('id', 'year', 'label'),
+            'team' => $team,
+            'year' => $year->only('id', 'year', 'label'),
             'inventoryRows' => $inventoryRows,
-            'loans'         => $loans,
-            'loanSummary'   => $loanSummary,
-            'items'         => InfrastructureItem::orderBy('name')->get(),
-            'canManage'     => $request->user()->can('infraestructura.inventario.gestionar'),
+            'loans' => $loans,
+            'loanSummary' => $loanSummary,
+            'items' => InfrastructureItem::orderBy('name')->get(),
+            'canManage' => $request->user()->can('infraestructura.inventario.gestionar'),
         ]);
     }
 
@@ -106,6 +106,7 @@ class InfrastructureInventoryController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $itemId = $data['infrastructure_item_id'] ?? $this->createItemFromRequest($request);
 
@@ -122,8 +123,8 @@ class InfrastructureInventoryController extends Controller
         InfrastructureInventoryItem::create([
             ...$data,
             'infrastructure_item_id' => $itemId,
-            'year_id'                => $year->id,
-            'created_by'             => $request->user()->id,
+            'year_id' => $year->id,
+            'created_by' => $request->user()->id,
         ]);
 
         return back()->with('success', 'Elemento agregado al inventario.');
@@ -132,6 +133,7 @@ class InfrastructureInventoryController extends Controller
     public function update(Request $request, string $team, InfrastructureInventoryItem $inventory): RedirectResponse
     {
         Gate::authorize('infraestructura.inventario.gestionar');
+        Gate::authorize('mutate', $inventory->year);
 
         $data = $this->validateInventory($request, inventory: $inventory);
 
@@ -143,6 +145,7 @@ class InfrastructureInventoryController extends Controller
     public function destroy(string $team, InfrastructureInventoryItem $inventory): RedirectResponse
     {
         Gate::authorize('infraestructura.inventario.gestionar');
+        Gate::authorize('mutate', $inventory->year);
 
         $inventory->delete();
 
@@ -170,10 +173,10 @@ class InfrastructureInventoryController extends Controller
     private function validateInventory(Request $request, bool $requireItem = false, ?InfrastructureInventoryItem $inventory = null): array
     {
         $rules = [
-            'needed_quantity'        => ['nullable', 'integer', 'min:0'],
+            'needed_quantity' => ['nullable', 'integer', 'min:0'],
             'own_available_quantity' => ['nullable', 'integer', 'min:0'],
             'own_to_repair_quantity' => ['nullable', 'integer', 'min:0'],
-            'notes'                  => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
         ];
 
         // infrastructure_item_id solo se fija al crear: cambiar de elemento
@@ -197,7 +200,7 @@ class InfrastructureInventoryController extends Controller
         }
 
         $available = $data['own_available_quantity'] ?? $inventory?->own_available_quantity ?? 0;
-        $toRepair  = $data['own_to_repair_quantity'] ?? $inventory?->own_to_repair_quantity ?? 0;
+        $toRepair = $data['own_to_repair_quantity'] ?? $inventory?->own_to_repair_quantity ?? 0;
 
         if ($toRepair > $available) {
             throw ValidationException::withMessages([

@@ -4,7 +4,9 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import Modal from '@/Components/Modal.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   team:       { type: String,  required: true },
@@ -18,6 +20,11 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const canMutateYear = useEditableYear(() => props.year)
+// Fase 19: gatea la edicion/alta/baja de items de planificacion (year-scoped).
+// El boton "✎" de editar PRODUCTO DE CATALOGO (linea del template) queda
+// fuera de este gate: PurchaseProduct no pertenece a ninguna edicion.
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 function fmtMoney(v) {
@@ -220,14 +227,17 @@ function submitNewCategory() {
     <div class="py-8 max-w-7xl mx-auto px-4">
 
       <!-- Año + navegación -->
-      <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <YearSelector :selected-year-id="year.id" />
-        <div class="flex items-center gap-4 text-sm">
-          <a :href="route('suppliers.index', { team })" class="text-indigo-600 hover:text-indigo-800">Proveedores</a>
-          <a v-if="canManage" :href="route('purchases.import', { team, target_year_id: year.id })" class="text-indigo-600 hover:text-indigo-800">
-            Importar desde otra edición
-          </a>
+      <div class="mb-6 space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <YearSelector :selected-year-id="year.id" />
+          <div class="flex items-center gap-4 text-sm">
+            <a :href="route('suppliers.index', { team })" class="text-indigo-600 hover:text-indigo-800">Proveedores</a>
+            <a v-if="canManage" :href="route('purchases.import', { team, target_year_id: year.id })" class="text-indigo-600 hover:text-indigo-800">
+              Importar desde otra edición
+            </a>
+          </div>
         </div>
+        <HistoricalEditionBanner :year="year" />
       </div>
 
       <!-- Totales -->
@@ -288,13 +298,13 @@ function submitNewCategory() {
               <th class="text-left px-3 py-2 font-medium w-36">Proveedor previsto</th>
               <th class="text-left px-3 py-2 font-medium w-36">Proveedor real</th>
               <th class="text-left px-3 py-2 font-medium w-40">Observaciones</th>
-              <th v-if="canManage" class="w-8"></th>
+              <th v-if="canManageNow" class="w-8"></th>
             </tr>
           </thead>
           <template v-for="group in groupedItems" :key="group.category">
             <tbody>
               <tr class="bg-gray-50">
-                <td :colspan="canManage ? 11 : 10" class="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <td :colspan="canManageNow ? 11 : 10" class="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   {{ group.category }}
                 </td>
               </tr>
@@ -310,7 +320,7 @@ function submitNewCategory() {
                   >✎</button>
                 </td>
 
-                <template v-if="canManage">
+                <template v-if="canManageNow">
                   <td class="px-1 py-1.5">
                     <input v-model="rowState[item.id].qty_1000" type="number" step="any" min="0"
                       class="w-full text-center text-xs rounded border-gray-200 focus:border-indigo-400 focus:ring-indigo-400"
@@ -404,7 +414,7 @@ function submitNewCategory() {
       </div>
 
       <!-- Agregar producto -->
-      <div v-if="canManage" class="mt-4">
+      <div v-if="canManageNow" class="mt-4">
         <button v-if="!showNewItem" type="button" class="text-sm text-indigo-600 hover:text-indigo-800" @click="openNewItem">
           + Agregar producto
         </button>

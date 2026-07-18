@@ -235,6 +235,7 @@ class ClientController extends Controller
     public function selfAssignForYear(Request $request, Client $client, ClientAssignmentService $assignments): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
+        Gate::authorize('mutate', $year);
         $assignment = ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
 
         Gate::authorize('selfAssign', $assignment);
@@ -250,6 +251,7 @@ class ClientController extends Controller
     public function transferForYear(Request $request, Client $client, ClientAssignmentService $assignments): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
+        Gate::authorize('mutate', $year);
         $request->validate(['assigned_user_id' => ['required', 'integer', 'exists:users,id']]);
 
         $assignment = ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
@@ -266,6 +268,7 @@ class ClientController extends Controller
     public function updateContactForYear(Request $request, Client $client): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
+        Gate::authorize('mutate', $year);
         $data = $request->validate([
             'contact_status' => ['required', 'string', 'in:pendiente,no_respondio,volver_a_llamar,no_interesado,interesado,pedido_realizado'],
             'notes' => ['nullable', 'string', 'max:2000'],
@@ -299,6 +302,7 @@ class ClientController extends Controller
     public function removeFromYear(Request $request, Client $client): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
+        Gate::authorize('mutate', $year);
 
         $assignment = ClientAssignment::where('client_id', $client->id)
             ->where('year_id', $year->id)

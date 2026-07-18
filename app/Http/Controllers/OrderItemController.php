@@ -23,6 +23,8 @@ class OrderItemController extends Controller
      */
     public function store(StoreOrderItemRequest $request, Order $order, PricingService $pricing): JsonResponse
     {
+        Gate::authorize('mutate', $order->year);
+
         $item = $pricing->addItemToOrder(
             order: $order,
             product: $request->validated('product'),
@@ -56,6 +58,7 @@ class OrderItemController extends Controller
     public function update(UpdateOrderItemRequest $request, Order $order, OrderItem $item, PricingService $pricing): JsonResponse
     {
         $this->assertBelongsToOrder($order, $item);
+        Gate::authorize('mutate', $order->year);
 
         $calculated = $pricing->calculateLine(
             product: $request->validated('product'),
@@ -84,6 +87,7 @@ class OrderItemController extends Controller
     {
         $this->assertBelongsToOrder($order, $item);
         Gate::authorize('update', $order);
+        Gate::authorize('mutate', $order->year);
 
         $item->delete();
 

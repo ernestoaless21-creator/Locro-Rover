@@ -44,17 +44,17 @@ class PurchasePlanItemController extends Controller
             ->count();
 
         return Inertia::render('Purchases/Index', [
-            'team'       => $team,
-            'year'       => $year->only('id', 'year', 'label'),
-            'items'      => $items,
-            'products'   => PurchaseProduct::with('category')->orderBy('name')->get(),
+            'team' => $team,
+            'year' => $year->only('id', 'year', 'label'),
+            'items' => $items,
+            'products' => PurchaseProduct::with('category')->orderBy('name')->get(),
             'categories' => PurchaseCategory::orderBy('name')->get(),
-            'suppliers'  => Supplier::where('is_active', true)->orderBy('name')->get(),
-            'totals'     => [
-                'estimated'                => (float) $items->sum('estimated_total_price'),
-                'real'                     => (float) $items->sum('actual_total_price'),
+            'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(),
+            'totals' => [
+                'estimated' => (float) $items->sum('estimated_total_price'),
+                'real' => (float) $items->sum('actual_total_price'),
                 'items_without_real_price' => $itemsWithoutRealPrice,
-                'items_count'              => $items->count(),
+                'items_count' => $items->count(),
             ],
             'canManage' => $request->user()->can('compras.planificacion.gestionar'),
         ]);
@@ -75,6 +75,7 @@ class PurchasePlanItemController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $productId = $data['purchase_product_id'] ?? $this->createProductFromRequest($request);
 
@@ -91,8 +92,8 @@ class PurchasePlanItemController extends Controller
         PurchasePlanItem::create([
             ...$data,
             'purchase_product_id' => $productId,
-            'year_id'             => $year->id,
-            'created_by'          => $request->user()->id,
+            'year_id' => $year->id,
+            'created_by' => $request->user()->id,
         ]);
 
         return back()->with('success', 'Ítem agregado a la planificación.');
@@ -101,6 +102,7 @@ class PurchasePlanItemController extends Controller
     public function update(Request $request, string $team, PurchasePlanItem $item): RedirectResponse
     {
         Gate::authorize('compras.planificacion.gestionar');
+        Gate::authorize('mutate', $item->year);
 
         $data = $this->validateItem($request);
 
@@ -112,6 +114,7 @@ class PurchasePlanItemController extends Controller
     public function destroy(string $team, PurchasePlanItem $item): RedirectResponse
     {
         Gate::authorize('compras.planificacion.gestionar');
+        Gate::authorize('mutate', $item->year);
 
         $item->delete();
 
@@ -121,7 +124,7 @@ class PurchasePlanItemController extends Controller
     private function createProductFromRequest(Request $request): int
     {
         $data = $request->validate([
-            'new_product_name'        => ['required', 'string', 'max:255'],
+            'new_product_name' => ['required', 'string', 'max:255'],
             'new_product_category_id' => ['nullable', 'integer', 'exists:purchase_categories,id'],
         ]);
 
@@ -134,8 +137,8 @@ class PurchasePlanItemController extends Controller
 
         $product = PurchaseProduct::create([
             'purchase_category_id' => $data['new_product_category_id'] ?? null,
-            'name'                 => trim($data['new_product_name']),
-            'unit'                 => $request->input('unit'),
+            'name' => trim($data['new_product_name']),
+            'unit' => $request->input('unit'),
         ]);
 
         return $product->id;
@@ -144,15 +147,15 @@ class PurchasePlanItemController extends Controller
     private function validateItem(Request $request, bool $requireProduct = false): array
     {
         $rules = [
-            'qty_1000'               => ['nullable', 'numeric', 'min:0'],
-            'qty_1500'               => ['nullable', 'numeric', 'min:0'],
-            'unit'                   => ['nullable', 'string', 'max:30'],
-            'estimated_total_price'  => ['nullable', 'numeric', 'min:0'],
-            'planned_supplier_id'    => ['nullable', 'integer', 'exists:suppliers,id'],
-            'actual_quantity'        => ['nullable', 'numeric', 'min:0'],
-            'actual_total_price'     => ['nullable', 'numeric', 'min:0'],
-            'actual_supplier_id'     => ['nullable', 'integer', 'exists:suppliers,id'],
-            'notes'                  => ['nullable', 'string'],
+            'qty_1000' => ['nullable', 'numeric', 'min:0'],
+            'qty_1500' => ['nullable', 'numeric', 'min:0'],
+            'unit' => ['nullable', 'string', 'max:30'],
+            'estimated_total_price' => ['nullable', 'numeric', 'min:0'],
+            'planned_supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+            'actual_quantity' => ['nullable', 'numeric', 'min:0'],
+            'actual_total_price' => ['nullable', 'numeric', 'min:0'],
+            'actual_supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+            'notes' => ['nullable', 'string'],
         ];
 
         // purchase_product_id solo se fija al crear: cambiar de producto un

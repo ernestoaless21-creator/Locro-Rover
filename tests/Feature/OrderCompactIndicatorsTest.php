@@ -18,7 +18,7 @@ use Tests\TestCase;
 /**
  * Fase 7 (correccion 4): tests SOLO para la logica backend nueva de esta
  * entrega (filtro Delivery/Retiro y los indicadores compactos nuevos:
- * gifts_count, losses_count, y el desglose de recaudacion gateado por
+ * gifted_portions, lost_portions, y el desglose de recaudacion gateado por
  * 'finanzas.ver'). No se tocan/repiten tests de fases anteriores.
  *
  * IMPORTANTE (indicado explicitamente por el usuario, respetado aca):
@@ -111,21 +111,41 @@ class OrderCompactIndicatorsTest extends TestCase
         );
     }
 
-    public function test_compact_counters_include_gift_and_loss_record_counts(): void
+    public function test_compact_counters_sum_gifted_and_lost_portions_for_users_with_production_permission(): void
     {
         $admin = User::factory()->create(['is_active' => true]);
-        $admin->assignRole('admin');
+        $admin->assignRole('admin'); // 'admin' tiene 'produccion.ver'.
 
         Gift::create(['year_id' => $this->year->id, 'recipient_name' => 'Carsten', 'quantity' => 2, 'created_by' => $admin->id]);
-        Gift::create(['year_id' => $this->year->id, 'recipient_name' => 'Otro', 'quantity' => 1, 'created_by' => $admin->id]);
+        Gift::create(['year_id' => $this->year->id, 'recipient_name' => 'Otro', 'quantity' => 2, 'created_by' => $admin->id]);
         Loss::create(['year_id' => $this->year->id, 'quantity' => 3, 'reason' => 'Se cayo una olla', 'created_by' => $admin->id]);
 
         $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}");
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('counters.gifts_count', 2)
-            ->where('counters.losses_count', 1)
+            ->where('counters.gifted_portions', 4)
+            ->where('counters.lost_portions', 3)
+        );
+    }
+
+    public function test_compact_counters_hide_gifted_and_lost_portions_without_production_permission(): void
+    {
+        $role = Role::create(['name' => 'sin_produccion', 'guard_name' => 'web']);
+        $role->givePermissionTo(['pedidos.ver', 'pedidos.ver-todos']);
+
+        $limited = User::factory()->create(['is_active' => true]);
+        $limited->assignRole('sin_produccion');
+
+        Gift::create(['year_id' => $this->year->id, 'recipient_name' => 'Carsten', 'quantity' => 2, 'created_by' => $limited->id]);
+        Loss::create(['year_id' => $this->year->id, 'quantity' => 3, 'reason' => 'Se cayo una olla', 'created_by' => $limited->id]);
+
+        $response = $this->actingAs($limited)->get("/orders?year_id={$this->year->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->missing('counters.gifted_portions')
+            ->missing('counters.lost_portions')
         );
     }
 

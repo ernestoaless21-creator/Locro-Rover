@@ -3,6 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
     year:          { type: Object,  required: true },
@@ -11,6 +13,9 @@ const props = defineProps({
     canManage:     { type: Boolean, required: true },
     teams:         { type: Array,   required: true },
 })
+
+const canMutateYear = useEditableYear(() => props.year)
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 // ─── Local reactive copy for optimistic reorder ──────────────────────────────
 const localDays = ref(props.days.map(d => ({ ...d, activities: [...(d.activities ?? [])] })))
@@ -354,6 +359,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
 
         <div class="py-8">
             <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+                <HistoricalEditionBanner :year="year" />
 
                 <!-- ─── Notas generales ─────────────────────────────────── -->
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -362,7 +368,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                             Notas generales
                         </h3>
                         <button
-                            v-if="canManage && !showNotesForm"
+                            v-if="canManageNow && !showNotesForm"
                             type="button"
                             class="text-xs text-indigo-600 hover:text-indigo-800"
                             @click="openNotesForm"
@@ -417,7 +423,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                     <p class="text-2xl mb-1">🗓️</p>
                     <p class="text-base">Todavía no hay días en el cronograma de esta edición.</p>
                     <button
-                        v-if="canManage"
+                        v-if="canManageNow"
                         type="button"
                         class="mt-4 text-sm text-ember hover:text-ember-strong"
                         @click="openNewDay"
@@ -431,7 +437,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                     <!-- Day header ─────────────────────────────────────────── -->
                     <div class="flex items-start gap-2">
                         <!-- Reorder buttons -->
-                        <div v-if="canManage" class="flex flex-col gap-0.5 mt-0.5 flex-shrink-0">
+                        <div v-if="canManageNow" class="flex flex-col gap-0.5 mt-0.5 flex-shrink-0">
                             <button
                                 type="button"
                                 :disabled="dayIdx === 0"
@@ -509,7 +515,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                     {{ day.description }}
                                 </p>
                                 <!-- Day actions -->
-                                <div v-if="canManage" class="flex items-center gap-3 ml-auto">
+                                <div v-if="canManageNow" class="flex items-center gap-3 ml-auto">
                                     <button type="button"
                                         class="text-xs text-ember hover:text-ember-strong"
                                         @click="openNewActivity(day.id)">
@@ -654,7 +660,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                 :class="{ 'border-b-0': actIdx === day.activities.length - 1 }"
                             >
                                 <!-- Reorder buttons: only meaningful for activities without a fixed start_time -->
-                                <div v-if="canManage && !act.start_time" class="flex flex-col gap-0.5 mt-0.5 flex-shrink-0 w-3">
+                                <div v-if="canManageNow && !act.start_time" class="flex flex-col gap-0.5 mt-0.5 flex-shrink-0 w-3">
                                     <button type="button" :disabled="isFirstUntimed(day, act)"
                                         class="text-gray-700 hover:text-gray-400 disabled:opacity-20 text-xs leading-none group-hover:text-gray-500"
                                         @click="reorderActivity(day.id, act.id, 'up')">▲</button>
@@ -662,7 +668,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                                         class="text-gray-700 hover:text-gray-400 disabled:opacity-20 text-xs leading-none group-hover:text-gray-500"
                                         @click="reorderActivity(day.id, act.id, 'down')">▼</button>
                                 </div>
-                                <div v-else-if="canManage" class="w-3 flex-shrink-0"></div>
+                                <div v-else-if="canManageNow" class="w-3 flex-shrink-0"></div>
 
                                 <!-- Time column -->
                                 <div class="w-24 flex-shrink-0 text-xs text-gray-400 font-mono pt-1 text-right">
@@ -714,7 +720,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
 
                                     <!-- Action buttons: las principales (realizar) llevan color/peso;
                                          las secundarias (omitir/editar/eliminar) quedan discretas. -->
-                                    <div v-if="canManage" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                                    <div v-if="canManageNow" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                                         <template v-if="act.status === 'pending'">
                                             <button type="button"
                                                 class="text-xs font-medium text-green-500 hover:text-green-400"
@@ -827,7 +833,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                             class="text-xs text-gray-400 italic pl-[9.5rem]"
                         >
                             Sin actividades.
-                            <button v-if="canManage" type="button"
+                            <button v-if="canManageNow" type="button"
                                 class="ml-1 text-ember hover:text-ember-strong not-italic"
                                 @click="openNewActivity(day.id)">
                                 + Agregar
@@ -877,7 +883,7 @@ const isEmpty = computed(() => localDays.value.length === 0)
                 </form>
 
                 <!-- ─── Add day button ──────────────────────────────────── -->
-                <div v-if="canManage && !showNewDayForm" class="text-center pt-2">
+                <div v-if="canManageNow && !showNewDayForm" class="text-center pt-2">
                     <button
                         type="button"
                         class="text-sm text-ember hover:text-ember-strong"

@@ -113,6 +113,20 @@ class User extends Authenticatable
         return $this->can('finanzas.ver');
     }
 
+    /**
+     * Fase 19: unico permiso que exime del bloqueo de "edicion historica de
+     * solo lectura" (ver Year::isEditableBy). Reutiliza 'anios.gestionar'
+     * -- el mismo permiso que ya usa Orders/New.vue + OrderController::store
+     * (canChooseYear) para decidir quien puede crear un pedido fuera de la
+     * edicion activa -- en vez de un chequeo de rol 'admin' hardcodeado, para
+     * no introducir un segundo criterio de "quien es administrador" que
+     * pueda divergir del ya existente.
+     */
+    public function canEditHistoricalEditions(): bool
+    {
+        return $this->can('anios.gestionar');
+    }
+
     public function teamSlug(): ?string
     {
         foreach (['logistica', 'compras', 'infraestructura', 'publicidad'] as $team) {

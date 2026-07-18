@@ -4,7 +4,9 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import Modal from '@/Components/Modal.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   team:          { type: String,  required: true },
@@ -17,6 +19,8 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const canMutateYear = useEditableYear(() => props.year)
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INVENTARIO
@@ -253,11 +257,14 @@ function saveReturnDate(loan) {
     <div class="py-8 max-w-7xl mx-auto px-4 space-y-10">
 
       <!-- Año + navegación -->
-      <div class="flex items-center justify-between flex-wrap gap-3">
-        <YearSelector :selected-year-id="year.id" />
-        <a v-if="canManage" :href="route('infrastructure.import', { team, target_year_id: year.id })" class="text-sm text-indigo-600 hover:text-indigo-800">
-          Importar desde otra edición
-        </a>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <YearSelector :selected-year-id="year.id" />
+          <a v-if="canManage" :href="route('infrastructure.import', { team, target_year_id: year.id })" class="text-sm text-indigo-600 hover:text-indigo-800">
+            Importar desde otra edición
+          </a>
+        </div>
+        <HistoricalEditionBanner :year="year" />
       </div>
 
       <!-- ═══════════ INVENTARIO GENERAL ═══════════ -->
@@ -276,7 +283,7 @@ function saveReturnDate(loan) {
                 <th class="text-center px-2 py-2 font-medium w-20">Total útil</th>
                 <th class="text-left px-3 py-2 font-medium w-32">Estado</th>
                 <th class="text-left px-3 py-2 font-medium w-40">Observaciones</th>
-                <th v-if="canManage" class="w-8"></th>
+                <th v-if="canManageNow" class="w-8"></th>
               </tr>
             </thead>
             <tbody>
@@ -292,7 +299,7 @@ function saveReturnDate(loan) {
                   >✎</button>
                 </td>
 
-                <template v-if="canManage">
+                <template v-if="canManageNow">
                   <td class="px-1 py-1.5">
                     <input v-model="rowState[row.id].needed_quantity" type="number" step="1" min="0"
                       class="w-full text-center text-xs rounded border-gray-200 focus:border-indigo-400 focus:ring-indigo-400"
@@ -361,7 +368,7 @@ function saveReturnDate(loan) {
         </div>
 
         <!-- Agregar elemento -->
-        <div v-if="canManage" class="mt-4">
+        <div v-if="canManageNow" class="mt-4">
           <button v-if="!showNewRow" type="button" class="text-sm text-indigo-600 hover:text-indigo-800" @click="openNewRow">
             + Agregar elemento
           </button>
@@ -490,7 +497,7 @@ function saveReturnDate(loan) {
                   </div>
 
                   <!-- Acciones -->
-                  <div v-if="canManage" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                  <div v-if="canManageNow" class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                     <template v-if="loan.status === 'pending'">
                       <button type="button" class="text-xs font-medium text-green-600 hover:text-green-800" @click="markReturned(loan)">
                         Marcar devuelto
@@ -557,7 +564,7 @@ function saveReturnDate(loan) {
         </div>
 
         <!-- Registrar préstamo -->
-        <div v-if="canManage" class="mt-4">
+        <div v-if="canManageNow" class="mt-4">
           <button v-if="!showNewLoan" type="button" class="text-sm text-indigo-600 hover:text-indigo-800" @click="openNewLoan">
             + Registrar préstamo
           </button>

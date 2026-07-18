@@ -8,7 +8,6 @@ use App\Models\Year;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,11 +31,11 @@ class ScheduleDayController extends Controller
             ->get();
 
         return Inertia::render('Schedule/Index', [
-            'year'          => $year->only('id', 'year', 'label'),
-            'days'          => $days,
+            'year' => $year->only('id', 'year', 'label'),
+            'days' => $days,
             'scheduleNotes' => $year->schedule_notes,
-            'canManage'     => $request->user()->can('cronograma.gestionar'),
-            'teams'         => ScheduleActivity::TEAMS,
+            'canManage' => $request->user()->can('cronograma.gestionar'),
+            'teams' => ScheduleActivity::TEAMS,
         ]);
     }
 
@@ -49,16 +48,17 @@ class ScheduleDayController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $maxOrder = ScheduleDay::where('year_id', $year->id)->max('sort_order') ?? -1;
 
         ScheduleDay::create([
-            'year_id'     => $year->id,
-            'date'        => $data['date'],
-            'title'       => $data['title'] ?? null,
+            'year_id' => $year->id,
+            'date' => $data['date'],
+            'title' => $data['title'] ?? null,
             'description' => $data['description'] ?? null,
-            'sort_order'  => $maxOrder + 1,
-            'created_by'  => $request->user()->id,
+            'sort_order' => $maxOrder + 1,
+            'created_by' => $request->user()->id,
         ]);
 
         return back()->with('success', 'Día creado.');
@@ -67,6 +67,7 @@ class ScheduleDayController extends Controller
     public function update(Request $request, ScheduleDay $day): RedirectResponse
     {
         Gate::authorize('cronograma.gestionar');
+        Gate::authorize('mutate', $day->year);
 
         $data = $this->validateDay($request);
         $day->update($data);
@@ -77,6 +78,7 @@ class ScheduleDayController extends Controller
     public function destroy(ScheduleDay $day): RedirectResponse
     {
         Gate::authorize('cronograma.gestionar');
+        Gate::authorize('mutate', $day->year);
 
         $day->delete();
 
@@ -88,9 +90,19 @@ class ScheduleDayController extends Controller
         Gate::authorize('cronograma.gestionar');
 
         $data = $request->validate([
-            'ids'   => ['required', 'array'],
+            'ids' => ['required', 'array'],
             'ids.*' => ['integer', 'exists:schedule_days,id'],
         ]);
+
+        // Fase 19: cierra un hueco preexistente -- reorder() no validaba a que
+        // edicion pertenecian los IDs recibidos. Se resuelven los años
+        // involucrados y se autoriza cada uno antes de tocar nada.
+        ScheduleDay::whereIn('id', $data['ids'])
+            ->with('year')
+            ->get()
+            ->pluck('year')
+            ->unique('id')
+            ->each(fn (Year $year) => Gate::authorize('mutate', $year));
 
         foreach ($data['ids'] as $order => $id) {
             ScheduleDay::where('id', $id)->update(['sort_order' => $order]);
@@ -104,13 +116,14 @@ class ScheduleDayController extends Controller
         Gate::authorize('cronograma.gestionar');
 
         $data = $request->validate([
-            'notes'   => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
             'year_id' => ['nullable', 'integer', 'exists:years,id'],
         ]);
 
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $year->update(['schedule_notes' => $data['notes'] ?? null]);
 
@@ -120,8 +133,8 @@ class ScheduleDayController extends Controller
     private function validateDay(Request $request): array
     {
         return $request->validate([
-            'date'        => ['required', 'date'],
-            'title'       => ['nullable', 'string', 'max:255'],
+            'date' => ['required', 'date'],
+            'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
         ]);
     }

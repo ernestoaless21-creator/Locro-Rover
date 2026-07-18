@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreClientObservationRequest;
 use App\Models\Client;
 use App\Models\ClientObservation;
+use App\Models\Year;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 
 class ClientObservationController extends Controller
 {
@@ -25,6 +27,8 @@ class ClientObservationController extends Controller
      */
     public function store(StoreClientObservationRequest $request, Client $client): JsonResponse
     {
+        Gate::authorize('mutate', Year::findOrFail($request->validated('year_id')));
+
         $text = trim((string) $request->validated('observation'));
 
         if ($text === '') {

@@ -42,10 +42,10 @@ class TeamTaskController extends Controller
             ->get();
 
         return Inertia::render('Teams/Show', [
-            'team'      => $team,
-            'tasks'     => $tasks,
+            'team' => $team,
+            'tasks' => $tasks,
             'documents' => $documents,
-            'year'      => $year->only('id', 'year', 'label'),
+            'year' => $year->only('id', 'year', 'label'),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
             'canImport' => $request->user()->can('equipos.gestionar-todos'),
         ]);
@@ -61,6 +61,7 @@ class TeamTaskController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $maxOrder = TeamTask::where('team', $team)->where('year_id', $year->id)->max('sort_order') ?? 0;
 
@@ -84,6 +85,7 @@ class TeamTaskController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         $this->ensureTaskBelongsToTeam($task, $team);
+        Gate::authorize('mutate', $task->year);
 
         $data = $this->validateTaskData($request);
         $task->update($data);
@@ -96,9 +98,10 @@ class TeamTaskController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         $this->ensureTaskBelongsToTeam($task, $team);
+        Gate::authorize('mutate', $task->year);
 
         $completing = ! $task->is_completed;
-        $now    = now();
+        $now = now();
         $userId = $request->user()->id;
 
         DB::transaction(function () use ($task, $completing, $now, $userId) {
@@ -136,6 +139,7 @@ class TeamTaskController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         $this->ensureTaskBelongsToTeam($task, $team);
+        Gate::authorize('mutate', $task->year);
 
         $task->delete();
 
@@ -159,11 +163,11 @@ class TeamTaskController extends Controller
     private function validateTaskData(Request $request): array
     {
         $data = $request->validate([
-            'title'        => ['required', 'string', 'max:255'],
-            'description'  => ['nullable', 'string'],
-            'notes'        => ['nullable', 'string'],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
             'optimal_date' => ['nullable', 'date'],
-            'due_date'     => ['nullable', 'date'],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         if (

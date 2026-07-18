@@ -78,4 +78,18 @@ class Year extends Model
         static::where('id', '!=', $this->id)->update(['is_active' => false]);
         $this->update(['is_active' => true]);
     }
+
+    /**
+     * Fase 19: unica fuente de verdad de "esta edicion se puede modificar
+     * ahora mismo". Cualquier edicion que no sea la activa pasa a ser de
+     * solo lectura para todos salvo quien tenga 'anios.gestionar' (ver
+     * User::canEditHistoricalEditions). Usado desde App\Policies\YearPolicy
+     * (Gate::authorize('mutate', $year)) en cada controlador que muta un
+     * registro perteneciente a una edicion -- NUNCA se debe repetir esta
+     * condicion inline en un controlador, siempre pasar por aca.
+     */
+    public function isEditableBy(User $user): bool
+    {
+        return $this->is_active || $user->canEditHistoricalEditions();
+    }
 }

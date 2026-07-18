@@ -43,11 +43,11 @@ class PublicityMaterialController extends Controller
             ->get();
 
         return Inertia::render('Publicity/Index', [
-            'team'       => $team,
-            'year'       => $year->only('id', 'year', 'label'),
-            'materials'  => $materials,
+            'team' => $team,
+            'year' => $year->only('id', 'year', 'label'),
+            'materials' => $materials,
             'categories' => PublicityCategory::orderBy('name')->get(),
-            'canManage'  => $request->user()->can('tareas.gestionar-propio-equipo'),
+            'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
         ]);
     }
 
@@ -61,16 +61,17 @@ class PublicityMaterialController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $this->materialService->store(
-            file:         $request->file('file'),
-            yearId:       $year->id,
-            categoryId:   $data['publicity_category_id'],
-            title:        $data['title'],
-            description:  $data['description'] ?? null,
-            notes:        $data['notes'] ?? null,
+            file: $request->file('file'),
+            yearId: $year->id,
+            categoryId: $data['publicity_category_id'],
+            title: $data['title'],
+            description: $data['description'] ?? null,
+            notes: $data['notes'] ?? null,
             materialDate: $data['material_date'] ?? null,
-            uploadedBy:   $request->user()->id,
+            uploadedBy: $request->user()->id,
         );
 
         return back()->with('success', 'Material subido.');
@@ -80,6 +81,7 @@ class PublicityMaterialController extends Controller
     {
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
+        Gate::authorize('mutate', $material->year);
 
         $data = $request->validated();
         unset($data['file']);
@@ -93,6 +95,7 @@ class PublicityMaterialController extends Controller
     {
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
+        Gate::authorize('mutate', $material->year);
 
         $this->materialService->delete($material);
 

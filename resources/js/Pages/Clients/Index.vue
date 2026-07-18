@@ -20,8 +20,10 @@ import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import ClientFormModal from '@/Components/ClientFormModal.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   clients: { type: Array, required: true },
@@ -40,6 +42,10 @@ const props = defineProps({
 const page = usePage()
 const can = (perm) => (page.props.permissions ?? []).includes(perm)
 const toast = useToast()
+// Fase 19: gatea SOLO las acciones "por edicion" (asignacion/seguimiento/
+// numero historico), no la edicion del Client en si (nombre/telefono), que
+// no pertenece a ninguna edicion particular (ver Client sin year_id).
+const canMutateYear = useEditableYear(() => props.year)
 
 // Fase 18: estado vacio contextual (distingue "sin resultados de busqueda/filtro"
 // de "todavia no hay clientes cargados").
@@ -348,6 +354,7 @@ function exportUrl() {
 
     <div class="py-6 max-w-7xl mx-auto px-4 space-y-4">
       <YearSelector :selected-year-id="year.id" />
+      <HistoricalEditionBanner :year="year" />
 
       <div class="flex flex-wrap gap-2 items-center">
         <div class="relative flex-1 min-w-[16rem]">
@@ -415,7 +422,7 @@ function exportUrl() {
       </div>
 
       <!-- Acciones masivas de asignacion (solo Logistica/Admin, seccion 2) -->
-      <div v-if="canBulk && selected.size > 0" class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap items-end gap-3">
+      <div v-if="canBulk && canMutateYear && selected.size > 0" class="bg-gray-900 text-white rounded-lg p-4 flex flex-wrap items-end gap-3">
         <span class="text-sm text-gray-400">{{ selected.size }} seleccionados</span>
         <div>
           <label class="text-xs text-gray-400 block mb-1">Asignar todos a</label>
@@ -486,7 +493,7 @@ function exportUrl() {
                   <span v-if="client.year_assignment?.assigned_user" class="mr-1">{{ client.year_assignment.assigned_user.name }}</span>
                   <span v-else class="text-yellow-400 mr-1">Sin asignar</span>
                   <button
-                    v-if="!client.year_assignment?.assigned_user"
+                    v-if="!client.year_assignment?.assigned_user && canMutateYear"
                     type="button"
                     class="text-blue-400 hover:underline text-xs"
                     @click="selfAssign(client)"
@@ -494,7 +501,7 @@ function exportUrl() {
                     Autoasignarme
                   </button>
                   <select
-                    v-if="canTransfer"
+                    v-if="canTransfer && canMutateYear"
                     class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs"
                     :value="''"
                     @change="transfer(client, $event.target.value); $event.target.value = ''"
@@ -506,7 +513,8 @@ function exportUrl() {
               </td>
               <td class="p-2">
                 <select
-                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs"
+                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs disabled:opacity-50"
+                  :disabled="!canMutateYear"
                   :value="client.year_assignment?.contact_status ?? 'pendiente'"
                   @change="updateContact(client, { contact_status: $event.target.value })"
                 >
@@ -520,7 +528,8 @@ function exportUrl() {
               <td class="p-2">
                 <input
                   type="text"
-                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs w-36"
+                  class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs w-36 disabled:opacity-50"
+                  :disabled="!canMutateYear"
                   :value="client.year_assignment?.notes"
                   placeholder="Observación de seguimiento..."
                   @change="updateContact(client, { notes: $event.target.value })"
@@ -540,7 +549,7 @@ function exportUrl() {
                     class="text-gray-300 hover:text-white text-xs"
                     @click="openEdit(client)"
                   >Editar</button>
-                  <button v-if="canTransfer" type="button" class="text-yellow-400 hover:text-yellow-300 text-xs" @click="removeFromYear(client)">Quitar de la edición</button>
+                  <button v-if="canTransfer && canMutateYear" type="button" class="text-yellow-400 hover:text-yellow-300 text-xs" @click="removeFromYear(client)">Quitar de la edición</button>
                   <button v-if="can('clientes.eliminar')" type="button" class="text-red-400 hover:text-red-300 text-xs" @click="destroyOne(client)">Eliminar</button>
                 </div>
               </td>

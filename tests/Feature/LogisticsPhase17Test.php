@@ -36,6 +36,7 @@ class LogisticsPhase17Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole('admin');
+
         return $u;
     }
 
@@ -43,6 +44,7 @@ class LogisticsPhase17Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole('jefe_logistica');
+
         return $u;
     }
 
@@ -50,6 +52,7 @@ class LogisticsPhase17Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole($team);
+
         return $u;
     }
 
@@ -71,14 +74,14 @@ class LogisticsPhase17Test extends TestCase
         $path = $file->store("logistics-records/{$this->year->id}", 'local');
 
         return LogisticsRecord::create(array_merge([
-            'year_id'               => $this->year->id,
+            'year_id' => $this->year->id,
             'logistics_category_id' => $category->id,
-            'title'                 => 'Recorrido barrio norte',
-            'file_path'             => $path,
-            'file_name'             => 'recorrido.pdf',
-            'file_size'             => 204800,
-            'mime_type'             => 'application/pdf',
-            'uploaded_by'           => $admin->id,
+            'title' => 'Recorrido barrio norte',
+            'file_path' => $path,
+            'file_name' => 'recorrido.pdf',
+            'file_size' => 204800,
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $admin->id,
         ], $overrides));
     }
 
@@ -120,8 +123,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido del member',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido del member',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -136,8 +139,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($jefe)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido del jefe',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido del jefe',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -152,8 +155,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Intento',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Intento',
+                'file' => $this->fakeFile(),
             ])
             ->assertForbidden();
 
@@ -168,8 +171,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($admin)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido admin',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido admin',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
     }
@@ -222,17 +225,17 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido mínimo',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido mínimo',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('logistics_records', [
-            'title'                  => 'Recorrido mínimo',
-            'logistics_category_id'  => $category->id,
-            'description'            => null,
-            'notes'                  => null,
-            'record_date'            => null,
+            'title' => 'Recorrido mínimo',
+            'logistics_category_id' => $category->id,
+            'description' => null,
+            'notes' => null,
+            'record_date' => null,
         ]);
     }
 
@@ -244,18 +247,18 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Exportación de pedidos',
-                'description'           => 'Exportación de pedidos para reparto',
-                'notes'                 => 'Actualizar antes de imprimir',
-                'record_date'           => '2026-07-05',
-                'file'                  => $this->fakeFile('exportacion_pedidos.xlsx', 500),
+                'title' => 'Exportación de pedidos',
+                'description' => 'Exportación de pedidos para reparto',
+                'notes' => 'Actualizar antes de imprimir',
+                'record_date' => '2026-07-05',
+                'file' => $this->fakeFile('exportacion_pedidos.xlsx', 500),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('logistics_records', [
-            'title'       => 'Exportación de pedidos',
+            'title' => 'Exportación de pedidos',
             'description' => 'Exportación de pedidos para reparto',
-            'notes'       => 'Actualizar antes de imprimir',
+            'notes' => 'Actualizar antes de imprimir',
             'record_date' => '2026-07-05',
         ]);
     }
@@ -270,14 +273,14 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido con finalidad',
-                'purpose'               => 'Reparto turno mañana',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido con finalidad',
+                'purpose' => 'Reparto turno mañana',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('logistics_records', [
-            'title'   => 'Recorrido con finalidad',
+            'title' => 'Recorrido con finalidad',
             'purpose' => 'Reparto turno mañana',
         ]);
     }
@@ -290,13 +293,13 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Recorrido sin finalidad',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Recorrido sin finalidad',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('logistics_records', [
-            'title'   => 'Recorrido sin finalidad',
+            'title' => 'Recorrido sin finalidad',
             'purpose' => null,
         ]);
     }
@@ -309,8 +312,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => $record->title,
-                'purpose'               => 'Finalidad editada',
+                'title' => $record->title,
+                'purpose' => 'Finalidad editada',
             ])
             ->assertRedirect();
 
@@ -324,7 +327,7 @@ class LogisticsPhase17Test extends TestCase
 
         $this->createRecord([
             'year_id' => $source->id,
-            'title'   => 'Recorrido con finalidad histórica',
+            'title' => 'Recorrido con finalidad histórica',
             'purpose' => 'Reparto turno mañana',
         ]);
 
@@ -347,7 +350,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'title' => 'Sin categoría',
-                'file'  => $this->fakeFile(),
+                'file' => $this->fakeFile(),
             ])
             ->assertSessionHasErrors('logistics_category_id');
     }
@@ -360,7 +363,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'file'                  => $this->fakeFile(),
+                'file' => $this->fakeFile(),
             ])
             ->assertSessionHasErrors('title');
     }
@@ -373,7 +376,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->post(route('logistics.store', ['team' => 'logistica']), [
                 'logistics_category_id' => $category->id,
-                'title'                 => 'Sin archivo',
+                'title' => 'Sin archivo',
             ])
             ->assertSessionHasErrors('file');
     }
@@ -412,10 +415,10 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $newCategory->id,
-                'title'                 => 'Editado',
-                'description'           => 'Nueva descripción',
-                'notes'                 => 'Nueva observación',
-                'record_date'           => '2026-07-08',
+                'title' => 'Editado',
+                'description' => 'Nueva descripción',
+                'notes' => 'Nueva observación',
+                'record_date' => '2026-07-08',
             ])
             ->assertRedirect();
 
@@ -436,7 +439,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => 'Otro título',
+                'title' => 'Otro título',
             ])
             ->assertRedirect();
 
@@ -451,7 +454,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => 'Hackeado',
+                'title' => 'Hackeado',
             ])
             ->assertForbidden();
     }
@@ -461,9 +464,9 @@ class LogisticsPhase17Test extends TestCase
     public function test_replacing_file_updates_file_fields_and_keeps_metadata(): void
     {
         $record = $this->createRecord([
-            'title'       => 'Recorrido original',
+            'title' => 'Recorrido original',
             'description' => 'Descripción original',
-            'notes'       => 'Observación original',
+            'notes' => 'Observación original',
             'record_date' => '2026-07-01',
         ]);
         $oldPath = $record->file_path;
@@ -472,11 +475,11 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => $record->title,
-                'description'           => $record->description,
-                'notes'                 => $record->notes,
-                'record_date'           => '2026-07-01',
-                'file'                  => $this->fakeFile('recorrido-corregido.pdf', 300),
+                'title' => $record->title,
+                'description' => $record->description,
+                'notes' => $record->notes,
+                'record_date' => '2026-07-01',
+                'file' => $this->fakeFile('recorrido-corregido.pdf', 300),
             ])
             ->assertRedirect();
 
@@ -505,8 +508,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => $record->title,
-                'file'                  => $this->fakeFile(),
+                'title' => $record->title,
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -527,8 +530,8 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => $record->title,
-                'file'                  => $this->fakeFile(),
+                'title' => $record->title,
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -545,7 +548,7 @@ class LogisticsPhase17Test extends TestCase
         $this->actingAs($member)
             ->put(route('logistics.update', ['team' => 'logistica', 'record' => $record->id]), [
                 'logistics_category_id' => $record->logistics_category_id,
-                'title'                 => 'Nuevo título, mismo archivo',
+                'title' => 'Nuevo título, mismo archivo',
             ])
             ->assertRedirect();
 
@@ -588,8 +591,13 @@ class LogisticsPhase17Test extends TestCase
         $this->assertDatabaseMissing('logistics_records', ['id' => $record->id]);
         Storage::disk('local')->assertExists($shared->file_path);
 
-        // Ahora sí, al borrar el último registro que lo referencia, se borra el archivo.
-        $this->actingAs($member)
+        // Fase 19: $shared pertenece a una edicion no activa (2025) -- un
+        // integrante comun del equipo ya no puede tocarla, solo alguien con
+        // 'anios.gestionar' (ver Year::isEditableBy). Se usa admin para la
+        // segunda baja, que es la que efectivamente prueba la limpieza del
+        // archivo compartido.
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)
             ->delete(route('logistics.destroy', ['team' => 'logistica', 'record' => $shared->id]))
             ->assertRedirect();
 
@@ -648,10 +656,10 @@ class LogisticsPhase17Test extends TestCase
         $target = Year::create(['year' => 2023, 'label' => 'Locro 2023', 'is_active' => false]);
 
         $record = $this->createRecord([
-            'year_id'     => $source->id,
-            'title'       => 'Recorrido histórico',
+            'year_id' => $source->id,
+            'title' => 'Recorrido histórico',
             'description' => 'Descripción reutilizable',
-            'notes'       => 'Observación de 2022',
+            'notes' => 'Observación de 2022',
             'record_date' => '2022-07-09',
         ]);
 
@@ -691,8 +699,8 @@ class LogisticsPhase17Test extends TestCase
         $admin = $this->makeAdmin();
         $this->actingAs($admin)
             ->post(route('logistics.import.store', ['team' => 'logistica']), [
-                'source_year_id'      => $source->id,
-                'target_year_id'      => $target->id,
+                'source_year_id' => $source->id,
+                'target_year_id' => $target->id,
                 'selected_record_ids' => [$r1->id],
             ])
             ->assertRedirect();

@@ -14,6 +14,7 @@ class ScheduleActivityController extends Controller
     public function store(Request $request, ScheduleDay $day): RedirectResponse
     {
         Gate::authorize('cronograma.gestionar');
+        Gate::authorize('mutate', $day->year);
 
         $data = $this->validateActivity($request);
 
@@ -21,13 +22,13 @@ class ScheduleActivityController extends Controller
 
         ScheduleActivity::create([
             'schedule_day_id' => $day->id,
-            'title'           => $data['title'],
-            'description'     => $data['description'] ?? null,
-            'start_time'      => $data['start_time'] ?? null,
-            'end_time'        => $data['end_time'] ?? null,
-            'team'            => $data['team'] ?? null,
-            'sort_order'      => $maxOrder + 1,
-            'created_by'      => $request->user()->id,
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'start_time' => $data['start_time'] ?? null,
+            'end_time' => $data['end_time'] ?? null,
+            'team' => $data['team'] ?? null,
+            'sort_order' => $maxOrder + 1,
+            'created_by' => $request->user()->id,
         ]);
 
         return back()->with('success', 'Actividad creada.');
@@ -37,15 +38,16 @@ class ScheduleActivityController extends Controller
     {
         Gate::authorize('cronograma.gestionar');
         $this->ensureActivityBelongsToDay($activity, $day);
+        Gate::authorize('mutate', $day->year);
 
         $data = $this->validateActivity($request);
 
         $activity->update([
-            'title'       => $data['title'],
+            'title' => $data['title'],
             'description' => $data['description'] ?? null,
-            'start_time'  => $data['start_time'] ?? null,
-            'end_time'    => $data['end_time'] ?? null,
-            'team'        => $data['team'] ?? null,
+            'start_time' => $data['start_time'] ?? null,
+            'end_time' => $data['end_time'] ?? null,
+            'team' => $data['team'] ?? null,
         ]);
 
         return back()->with('success', 'Actividad actualizada.');
@@ -55,6 +57,7 @@ class ScheduleActivityController extends Controller
     {
         Gate::authorize('cronograma.gestionar');
         $this->ensureActivityBelongsToDay($activity, $day);
+        Gate::authorize('mutate', $day->year);
 
         $activity->delete();
 
@@ -71,9 +74,10 @@ class ScheduleActivityController extends Controller
     {
         Gate::authorize('cronograma.gestionar');
         $this->ensureActivityBelongsToDay($activity, $day);
+        Gate::authorize('mutate', $day->year);
 
         $data = $request->validate([
-            'status'       => ['required', 'in:pending,completed,skipped'],
+            'status' => ['required', 'in:pending,completed,skipped'],
             'complete_now' => ['boolean'],
         ]);
 
@@ -103,11 +107,12 @@ class ScheduleActivityController extends Controller
     {
         Gate::authorize('cronograma.gestionar');
         $this->ensureActivityBelongsToDay($activity, $day);
+        Gate::authorize('mutate', $day->year);
 
         $data = $request->validate([
             'actual_date' => ['nullable', 'date'],
             'actual_time' => ['nullable', 'date_format:H:i'],
-            'notes'       => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         if (! empty($data['actual_time']) && empty($data['actual_date'])) {
@@ -119,7 +124,7 @@ class ScheduleActivityController extends Controller
         $activity->update([
             'actual_date' => $data['actual_date'] ?? null,
             'actual_time' => $data['actual_time'] ?? null,
-            'notes'       => $data['notes'] ?? null,
+            'notes' => $data['notes'] ?? null,
         ]);
 
         return back()->with('success', 'Ejecución actualizada.');
@@ -133,9 +138,10 @@ class ScheduleActivityController extends Controller
     public function reorder(Request $request, ScheduleDay $day): RedirectResponse
     {
         Gate::authorize('cronograma.gestionar');
+        Gate::authorize('mutate', $day->year);
 
         $data = $request->validate([
-            'ids'   => ['required', 'array'],
+            'ids' => ['required', 'array'],
             'ids.*' => ['integer'],
         ]);
 
@@ -161,11 +167,11 @@ class ScheduleActivityController extends Controller
     private function validateActivity(Request $request): array
     {
         $rules = [
-            'title'       => ['required', 'string', 'max:255'],
+            'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'start_time'  => ['nullable', 'date_format:H:i'],
-            'end_time'    => ['nullable', 'date_format:H:i'],
-            'team'        => ['nullable', 'string', 'in:' . implode(',', ScheduleActivity::TEAMS)],
+            'start_time' => ['nullable', 'date_format:H:i'],
+            'end_time' => ['nullable', 'date_format:H:i'],
+            'team' => ['nullable', 'string', 'in:'.implode(',', ScheduleActivity::TEAMS)],
         ];
 
         $data = $request->validate($rules);

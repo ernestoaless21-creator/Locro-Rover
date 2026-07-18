@@ -16,6 +16,7 @@ class TeamTaskItemController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         abort_unless($task->team === $team, 404);
+        Gate::authorize('mutate', $task->year);
 
         $data = $request->validate(['title' => ['required', 'string', 'max:255']]);
 
@@ -23,9 +24,9 @@ class TeamTaskItemController extends Controller
 
         TeamTaskItem::create([
             'team_task_id' => $task->id,
-            'title'        => $data['title'],
-            'sort_order'   => $maxOrder + 1,
-            'created_by'   => $request->user()->id,
+            'title' => $data['title'],
+            'sort_order' => $maxOrder + 1,
+            'created_by' => $request->user()->id,
         ]);
 
         return back()->with('success', 'Paso agregado.');
@@ -37,6 +38,7 @@ class TeamTaskItemController extends Controller
         $this->authorizeTeamAccess($request, $team);
         abort_unless($task->team === $team, 404);
         abort_unless($item->team_task_id === $task->id, 404);
+        Gate::authorize('mutate', $task->year);
 
         $data = $request->validate(['title' => ['required', 'string', 'max:255']]);
         $item->update(['title' => $data['title']]);
@@ -50,9 +52,10 @@ class TeamTaskItemController extends Controller
         $this->authorizeTeamAccess($request, $team);
         abort_unless($task->team === $team, 404);
         abort_unless($item->team_task_id === $task->id, 404);
+        Gate::authorize('mutate', $task->year);
 
         $completing = ! $item->is_completed;
-        $now    = now();
+        $now = now();
         $userId = $request->user()->id;
 
         DB::transaction(function () use ($task, $item, $completing, $now, $userId) {
@@ -93,6 +96,7 @@ class TeamTaskItemController extends Controller
         $this->authorizeTeamAccess($request, $team);
         abort_unless($task->team === $team, 404);
         abort_unless($item->team_task_id === $task->id, 404);
+        Gate::authorize('mutate', $task->year);
 
         $item->delete();
 

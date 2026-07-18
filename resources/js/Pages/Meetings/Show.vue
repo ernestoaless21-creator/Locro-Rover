@@ -1,15 +1,21 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Link, useForm, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
     meeting:            Object,
+    year:               Object,
     decisionCategories: Object,
     decisionTeams:      Array,
     availableDocuments: Array,
     canManage:          Boolean,
 })
+
+const canMutateYear = useEditableYear(() => props.year)
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 // ── Decisiones ────────────────────────────────────────────────────────────────
 
@@ -117,7 +123,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                     <h2 class="mt-1 font-semibold text-xl text-white leading-tight">{{ meeting.title }}</h2>
                     <p class="text-sm text-gray-400 mt-0.5 capitalize">{{ formatDate(meeting.date) }}</p>
                 </div>
-                <div v-if="canManage" class="flex gap-2 shrink-0 mt-1">
+                <div v-if="canManageNow" class="flex gap-2 shrink-0 mt-1">
                     <Link
                         :href="route('meetings.edit', meeting.id)"
                         class="px-3 py-1.5 text-sm text-gray-300 border border-gray-600 rounded-md hover:bg-surface-3 hover:text-white transition"
@@ -137,6 +143,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
 
         <div class="py-8">
             <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+                <HistoricalEditionBanner :year="year" />
 
                 <!-- Encabezado formal del acta -->
                 <div class="bg-white shadow-sm border border-gray-200 rounded-lg px-8 py-6">
@@ -186,7 +193,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
 
                 <!-- Decisiones: solo botón cuando está vacío, tarjeta completa cuando hay contenido -->
                 <button
-                    v-if="canManage && meeting.decisions.length === 0 && !showDecisionForm"
+                    v-if="canManageNow && meeting.decisions.length === 0 && !showDecisionForm"
                     type="button"
                     class="text-sm text-indigo-600 hover:text-indigo-800"
                     @click="showDecisionForm = true"
@@ -198,7 +205,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Decisiones</h3>
                         <button
-                            v-if="canManage"
+                            v-if="canManageNow"
                             type="button"
                             class="text-sm text-indigo-600 hover:text-indigo-800"
                             @click="showDecisionForm = !showDecisionForm"
@@ -207,7 +214,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                         </button>
                     </div>
 
-                    <form v-if="showDecisionForm && canManage" class="mb-5 p-4 bg-gray-50 rounded-md space-y-3" @submit.prevent="submitDecision">
+                    <form v-if="showDecisionForm && canManageNow" class="mb-5 p-4 bg-gray-50 rounded-md space-y-3" @submit.prevent="submitDecision">
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
@@ -256,7 +263,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                                         </span>
                                         <p class="text-sm text-gray-800 whitespace-pre-line">{{ d.text }}</p>
                                     </div>
-                                    <div v-if="canManage" class="flex gap-2 shrink-0">
+                                    <div v-if="canManageNow" class="flex gap-2 shrink-0">
                                         <button type="button" class="text-xs text-gray-400 hover:text-indigo-600" @click="startEditDecision(d)">Editar</button>
                                         <button type="button" class="text-xs text-gray-400 hover:text-red-600" @click="deleteDecision(d)">Eliminar</button>
                                     </div>
@@ -288,7 +295,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-400">Documentos asociados</h3>
                         <button
-                            v-if="canManage && availableToAttach().length > 0"
+                            v-if="canManageNow && availableToAttach().length > 0"
                             type="button"
                             class="text-sm text-indigo-600 hover:text-indigo-800"
                             @click="showDocForm = !showDocForm"
@@ -297,7 +304,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                         </button>
                     </div>
 
-                    <form v-if="showDocForm && canManage" class="mb-4 p-4 bg-gray-50 rounded-md flex gap-2 items-end" @submit.prevent="attachDocument">
+                    <form v-if="showDocForm && canManageNow" class="mb-4 p-4 bg-gray-50 rounded-md flex gap-2 items-end" @submit.prevent="attachDocument">
                         <div class="flex-1">
                             <label class="block text-xs font-medium text-gray-600 mb-1">Documento</label>
                             <select v-model="docForm.team_document_id" class="w-full border-gray-300 rounded text-sm">
@@ -334,7 +341,7 @@ const availableToAttach = () => props.availableDocuments.filter(d => !attachedId
                                 </p>
                             </div>
                             <button
-                                v-if="canManage"
+                                v-if="canManageNow"
                                 type="button"
                                 class="text-xs text-gray-400 hover:text-red-600 ml-4"
                                 @click="detachDocument(doc)"

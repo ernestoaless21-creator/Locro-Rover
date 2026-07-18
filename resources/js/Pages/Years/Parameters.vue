@@ -17,7 +17,9 @@ import { ref, computed, watch } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   years: { type: Array, required: true },
@@ -27,6 +29,7 @@ const toast = useToast()
 
 const selectedYearId = ref(props.years.find((y) => y.is_active)?.id ?? props.years[0]?.id ?? null)
 const selectedYear = computed(() => props.years.find((y) => y.id === selectedYearId.value) ?? null)
+const canMutateYear = useEditableYear(selectedYear)
 
 const form = ref({})
 const saving = ref(false)
@@ -231,6 +234,7 @@ function createYear() {
       <!-- Edicion de parametros -->
       <div v-if="selectedYear" class="bg-surface border border-border text-white rounded-lg p-5 space-y-4">
         <h3 class="text-sm text-gray-400">Editando: {{ selectedYear.year }}</h3>
+        <HistoricalEditionBanner :year="selectedYear" />
 
         <div>
           <label class="text-sm text-gray-400 block mb-1">Etiqueta</label>
@@ -350,7 +354,7 @@ function createYear() {
         </p>
 
         <div class="flex justify-end">
-          <PrimaryButton :disabled="saving" @click="requestSave">
+          <PrimaryButton :disabled="saving || !canMutateYear" @click="requestSave">
             {{ saving ? 'Guardando...' : 'Guardar parámetros' }}
           </PrimaryButton>
         </div>

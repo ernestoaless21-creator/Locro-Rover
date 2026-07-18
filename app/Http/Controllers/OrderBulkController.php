@@ -29,6 +29,7 @@ class OrderBulkController extends Controller
         DB::transaction(function () use ($orders, $request, &$count, $assignments) {
             foreach ($orders as $order) {
                 Gate::authorize('assignRover', [$order, (int) $request->validated('rover_id')]);
+                Gate::authorize('mutate', $order->year);
                 $order->update([
                     'rover_id' => $request->validated('rover_id'),
                     'updated_by' => $request->user()->id,
@@ -63,6 +64,7 @@ class OrderBulkController extends Controller
         DB::transaction(function () use ($orders, $mode, $request, $paidAt, $notes, $userId, &$paymentsCreated) {
             foreach ($orders as $order) {
                 Gate::authorize('registerPayment', $order);
+                Gate::authorize('mutate', $order->year);
 
                 if ($mode === 'full_balance') {
                     if (bccomp((string) $order->balance_due, '0.00', 2) <= 0) {
@@ -108,6 +110,7 @@ class OrderBulkController extends Controller
         DB::transaction(function () use ($orders, $request, &$count) {
             foreach ($orders as $order) {
                 Gate::authorize('withdraw', $order);
+                Gate::authorize('mutate', $order->year);
                 $order->markWithdrawn($request->user()->id, $request->validated('notes'));
                 $count++;
             }
@@ -130,6 +133,7 @@ class OrderBulkController extends Controller
         DB::transaction(function () use ($orders, &$count) {
             foreach ($orders as $order) {
                 Gate::authorize('withdraw', $order);
+                Gate::authorize('mutate', $order->year);
                 $order->unmarkWithdrawn();
                 $count++;
             }
@@ -165,6 +169,7 @@ class OrderBulkController extends Controller
             foreach ($orders as $order) {
                 Gate::authorize('registerPayment', $order);
                 Gate::authorize('withdraw', $order);
+                Gate::authorize('mutate', $order->year);
 
                 if (bccomp((string) $order->balance_due, '0.00', 2) > 0) {
                     $order->payments()->create([

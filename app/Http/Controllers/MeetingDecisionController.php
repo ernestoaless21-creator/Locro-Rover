@@ -17,6 +17,7 @@ class MeetingDecisionController extends Controller
     public function store(Request $request, Meeting $meeting): RedirectResponse
     {
         Gate::authorize('actas.gestionar');
+        Gate::authorize('mutate', $meeting->year);
 
         $data = $this->validateDecision($request);
         $this->service->addDecision($meeting, $data);
@@ -28,6 +29,7 @@ class MeetingDecisionController extends Controller
     {
         Gate::authorize('actas.gestionar');
         abort_unless($decision->meeting_id === $meeting->id, 404);
+        Gate::authorize('mutate', $meeting->year);
 
         $data = $this->validateDecision($request);
         $this->service->updateDecision($decision, $data);
@@ -39,6 +41,7 @@ class MeetingDecisionController extends Controller
     {
         Gate::authorize('actas.gestionar');
         abort_unless($decision->meeting_id === $meeting->id, 404);
+        Gate::authorize('mutate', $meeting->year);
 
         $this->service->deleteDecision($decision);
 
@@ -48,9 +51,9 @@ class MeetingDecisionController extends Controller
     private function validateDecision(Request $request): array
     {
         return $request->validate([
-            'text'     => ['required', 'string'],
+            'text' => ['required', 'string'],
             'category' => ['required', Rule::in(array_keys(MeetingDecision::CATEGORIES))],
-            'team'     => ['nullable', Rule::in(MeetingDecision::TEAMS)],
+            'team' => ['nullable', Rule::in(MeetingDecision::TEAMS)],
         ]);
     }
 }

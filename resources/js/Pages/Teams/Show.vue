@@ -3,7 +3,9 @@ import { Head, router, useForm } from '@inertiajs/vue3'
 import { ref, computed, reactive } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   team:      { type: String,  required: true },
@@ -13,6 +15,13 @@ const props = defineProps({
   canManage: { type: Boolean, required: true },
   canImport: { type: Boolean, default: false },
 })
+
+const canMutateYear = useEditableYear(() => props.year)
+// Fase 19: los controles de mutacion (crear/editar/eliminar/toggle) requieren
+// AMBOS: el permiso de equipo (canManage, ya recibido del backend) y que la
+// edicion sea editable. La visibilidad de secciones (ej. lista de subtareas)
+// sigue usando canManage solo, para no ocultar informacion ya cargada.
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 const TEAM_LABELS = {
   logistica: 'Logística',
@@ -344,8 +353,9 @@ function destroyDoc(doc) {
     <div class="py-8 max-w-3xl mx-auto px-4">
 
       <!-- Selector de año -->
-      <div class="mb-6">
+      <div class="mb-6 space-y-3">
         <YearSelector :selected-year-id="year.id" />
+        <HistoricalEditionBanner :year="year" />
       </div>
 
       <!-- Fase 14: accesos a planificación de compras y proveedores (solo equipo Compras) -->
@@ -424,7 +434,7 @@ function destroyDoc(doc) {
 
       <!-- Formulario crear tarea -->
       <form
-        v-if="canManage"
+        v-if="canManageNow"
         @submit.prevent="addTask"
         class="mb-6 bg-white rounded-lg shadow-sm p-4 border border-gray-100"
       >
@@ -504,7 +514,7 @@ function destroyDoc(doc) {
             <!-- Checkbox de la tarea: stop para no propagar al título -->
             <div class="shrink-0" @click.stop>
               <input
-                v-if="canManage"
+                v-if="canManageNow"
                 type="checkbox"
                 :checked="task.is_completed"
                 class="rounded border-gray-300 text-indigo-600 cursor-pointer"
@@ -555,7 +565,7 @@ function destroyDoc(doc) {
             </button>
 
             <!-- Acciones de gestión (stop para no propagar) -->
-            <div v-if="canManage" class="flex gap-2 shrink-0" @click.stop>
+            <div v-if="canManageNow" class="flex gap-2 shrink-0" @click.stop>
               <button
                 v-if="editingTaskId !== task.id"
                 type="button"
@@ -653,7 +663,7 @@ function destroyDoc(doc) {
                     <!-- Checkbox de subtarea -->
                     <div class="shrink-0">
                       <input
-                        v-if="canManage"
+                        v-if="canManageNow"
                         type="checkbox"
                         :checked="item.is_completed"
                         class="rounded border-gray-300 text-indigo-600 cursor-pointer"
@@ -687,7 +697,7 @@ function destroyDoc(doc) {
                         class="flex-1 text-sm"
                         :class="item.is_completed ? 'line-through text-gray-400' : 'text-gray-700'"
                       >{{ item.title }}</span>
-                      <template v-if="canManage">
+                      <template v-if="canManageNow">
                         <button
                           type="button"
                           class="shrink-0 text-gray-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -717,7 +727,7 @@ function destroyDoc(doc) {
 
                 <!-- Formulario agregar subtarea -->
                 <form
-                  v-if="canManage"
+                  v-if="canManageNow"
                   @submit.prevent="addItem(task)"
                   class="flex gap-2"
                 >
@@ -817,7 +827,7 @@ function destroyDoc(doc) {
         <div class="mb-4 flex items-center justify-between gap-4">
           <h3 class="font-semibold text-gray-700 shrink-0">Documentación</h3>
           <button
-            v-if="canManage"
+            v-if="canManageNow"
             type="button"
             class="text-sm text-indigo-600 hover:text-indigo-800 font-medium shrink-0"
             @click="showUploadForm = !showUploadForm"
@@ -828,7 +838,7 @@ function destroyDoc(doc) {
 
         <!-- Formulario de subida -->
         <form
-          v-if="canManage && showUploadForm"
+          v-if="canManageNow && showUploadForm"
           class="mb-5 bg-white rounded-lg shadow-sm border border-gray-100 p-4"
           @submit.prevent="submitUpload"
         >
@@ -911,7 +921,7 @@ function destroyDoc(doc) {
                   >
                     Descargar
                   </a>
-                  <template v-if="canManage">
+                  <template v-if="canManageNow">
                     <span class="text-gray-200">|</span>
                     <button
                       type="button"

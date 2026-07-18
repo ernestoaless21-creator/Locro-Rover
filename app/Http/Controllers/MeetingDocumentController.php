@@ -16,6 +16,7 @@ class MeetingDocumentController extends Controller
     public function attach(Request $request, Meeting $meeting): RedirectResponse
     {
         Gate::authorize('actas.gestionar');
+        Gate::authorize('mutate', $meeting->year);
 
         $data = $request->validate([
             'team_document_id' => ['required', 'integer', 'exists:team_documents,id'],
@@ -32,6 +33,7 @@ class MeetingDocumentController extends Controller
     public function detach(Meeting $meeting, TeamDocument $document): RedirectResponse
     {
         Gate::authorize('actas.gestionar');
+        Gate::authorize('mutate', $meeting->year);
 
         $this->service->detachDocument($meeting, $document->id);
 

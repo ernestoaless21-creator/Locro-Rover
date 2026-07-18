@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
     meetings:  Array,
@@ -10,6 +12,7 @@ const props = defineProps({
     canManage: Boolean,
 })
 
+const canMutateYear = useEditableYear(() => props.year)
 const selectedYearId = ref(props.year.id)
 
 function changeYear() {
@@ -52,7 +55,7 @@ const shortDate = (dateStr) =>
                         <option v-for="y in years" :key="y.id" :value="y.id">{{ y.label }}</option>
                     </select>
                     <Link
-                        v-if="canManage"
+                        v-if="canManage && canMutateYear"
                         :href="route('meetings.create', { year_id: year.id })"
                         class="inline-flex items-center px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-md hover:bg-red-600 transition"
                     >
@@ -63,7 +66,8 @@ const shortDate = (dateStr) =>
         </template>
 
         <div class="py-8">
-            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+                <HistoricalEditionBanner :year="year" />
 
                 <div v-if="meetings.length === 0" class="text-center py-16 text-gray-500">
                     <p class="text-2xl mb-1">📋</p>

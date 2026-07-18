@@ -35,6 +35,7 @@ class PublicityPhase16Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole('admin');
+
         return $u;
     }
 
@@ -42,6 +43,7 @@ class PublicityPhase16Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole('jefe_publicidad');
+
         return $u;
     }
 
@@ -49,6 +51,7 @@ class PublicityPhase16Test extends TestCase
     {
         $u = User::factory()->create(['is_active' => true]);
         $u->assignRole($team);
+
         return $u;
     }
 
@@ -70,14 +73,14 @@ class PublicityPhase16Test extends TestCase
         $path = $file->store("publicity-materials/{$this->year->id}", 'local');
 
         return PublicityMaterial::create(array_merge([
-            'year_id'               => $this->year->id,
+            'year_id' => $this->year->id,
             'publicity_category_id' => $category->id,
-            'title'                 => 'Flyer principal',
-            'file_path'             => $path,
-            'file_name'             => 'flyer.jpg',
-            'file_size'             => 204800,
-            'mime_type'             => 'image/jpeg',
-            'uploaded_by'           => $admin->id,
+            'title' => 'Flyer principal',
+            'file_path' => $path,
+            'file_name' => 'flyer.jpg',
+            'file_size' => 204800,
+            'mime_type' => 'image/jpeg',
+            'uploaded_by' => $admin->id,
         ], $overrides));
     }
 
@@ -119,8 +122,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Flyer del member',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Flyer del member',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -135,8 +138,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($jefe)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Flyer del jefe',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Flyer del jefe',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -151,8 +154,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Intento',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Intento',
+                'file' => $this->fakeFile(),
             ])
             ->assertForbidden();
 
@@ -167,8 +170,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($admin)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Flyer admin',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Flyer admin',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
     }
@@ -221,17 +224,17 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Flyer mínimo',
-                'file'                  => $this->fakeFile(),
+                'title' => 'Flyer mínimo',
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('publicity_materials', [
-            'title'                  => 'Flyer mínimo',
-            'publicity_category_id'  => $category->id,
-            'description'            => null,
-            'notes'                  => null,
-            'material_date'          => null,
+            'title' => 'Flyer mínimo',
+            'publicity_category_id' => $category->id,
+            'description' => null,
+            'notes' => null,
+            'material_date' => null,
         ]);
     }
 
@@ -243,18 +246,18 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Reel del corte',
-                'description'           => 'Reel mostrando el corte de la carne',
-                'notes'                 => 'Grabado con el celu de Juan',
-                'material_date'         => '2026-07-05',
-                'file'                  => $this->fakeFile('reel.mp4', 500),
+                'title' => 'Reel del corte',
+                'description' => 'Reel mostrando el corte de la carne',
+                'notes' => 'Grabado con el celu de Juan',
+                'material_date' => '2026-07-05',
+                'file' => $this->fakeFile('reel.mp4', 500),
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('publicity_materials', [
-            'title'         => 'Reel del corte',
-            'description'   => 'Reel mostrando el corte de la carne',
-            'notes'         => 'Grabado con el celu de Juan',
+            'title' => 'Reel del corte',
+            'description' => 'Reel mostrando el corte de la carne',
+            'notes' => 'Grabado con el celu de Juan',
             'material_date' => '2026-07-05',
         ]);
     }
@@ -266,7 +269,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'title' => 'Sin categoría',
-                'file'  => $this->fakeFile(),
+                'file' => $this->fakeFile(),
             ])
             ->assertSessionHasErrors('publicity_category_id');
     }
@@ -279,7 +282,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'file'                  => $this->fakeFile(),
+                'file' => $this->fakeFile(),
             ])
             ->assertSessionHasErrors('title');
     }
@@ -292,7 +295,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->post(route('publicity.store', ['team' => 'publicidad']), [
                 'publicity_category_id' => $category->id,
-                'title'                 => 'Sin archivo',
+                'title' => 'Sin archivo',
             ])
             ->assertSessionHasErrors('file');
     }
@@ -331,10 +334,10 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $newCategory->id,
-                'title'                 => 'Editado',
-                'description'           => 'Nueva descripción',
-                'notes'                 => 'Nueva observación',
-                'material_date'         => '2026-07-08',
+                'title' => 'Editado',
+                'description' => 'Nueva descripción',
+                'notes' => 'Nueva observación',
+                'material_date' => '2026-07-08',
             ])
             ->assertRedirect();
 
@@ -355,7 +358,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => 'Otro título',
+                'title' => 'Otro título',
             ])
             ->assertRedirect();
 
@@ -370,7 +373,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => 'Hackeado',
+                'title' => 'Hackeado',
             ])
             ->assertForbidden();
     }
@@ -380,9 +383,9 @@ class PublicityPhase16Test extends TestCase
     public function test_replacing_file_updates_file_fields_and_keeps_metadata(): void
     {
         $material = $this->createMaterial([
-            'title'         => 'Flyer original',
-            'description'   => 'Descripción original',
-            'notes'         => 'Observación original',
+            'title' => 'Flyer original',
+            'description' => 'Descripción original',
+            'notes' => 'Observación original',
             'material_date' => '2026-07-01',
         ]);
         $oldPath = $material->file_path;
@@ -391,11 +394,11 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => $material->title,
-                'description'           => $material->description,
-                'notes'                 => $material->notes,
-                'material_date'         => '2026-07-01',
-                'file'                  => $this->fakeFile('flyer-corregido.png', 300),
+                'title' => $material->title,
+                'description' => $material->description,
+                'notes' => $material->notes,
+                'material_date' => '2026-07-01',
+                'file' => $this->fakeFile('flyer-corregido.png', 300),
             ])
             ->assertRedirect();
 
@@ -424,8 +427,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => $material->title,
-                'file'                  => $this->fakeFile(),
+                'title' => $material->title,
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -446,8 +449,8 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => $material->title,
-                'file'                  => $this->fakeFile(),
+                'title' => $material->title,
+                'file' => $this->fakeFile(),
             ])
             ->assertRedirect();
 
@@ -464,7 +467,7 @@ class PublicityPhase16Test extends TestCase
         $this->actingAs($member)
             ->put(route('publicity.update', ['team' => 'publicidad', 'material' => $material->id]), [
                 'publicity_category_id' => $material->publicity_category_id,
-                'title'                 => 'Nuevo título, mismo archivo',
+                'title' => 'Nuevo título, mismo archivo',
             ])
             ->assertRedirect();
 
@@ -507,8 +510,13 @@ class PublicityPhase16Test extends TestCase
         $this->assertDatabaseMissing('publicity_materials', ['id' => $material->id]);
         Storage::disk('local')->assertExists($shared->file_path);
 
-        // Ahora sí, al borrar el último registro que lo referencia, se borra el archivo.
-        $this->actingAs($member)
+        // Fase 19: $shared pertenece a una edicion no activa (2025) -- un
+        // integrante comun del equipo ya no puede tocarla, solo alguien con
+        // 'anios.gestionar' (ver Year::isEditableBy). Se usa admin para la
+        // segunda baja, que es la que efectivamente prueba la limpieza del
+        // archivo compartido.
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin)
             ->delete(route('publicity.destroy', ['team' => 'publicidad', 'material' => $shared->id]))
             ->assertRedirect();
 
@@ -567,10 +575,10 @@ class PublicityPhase16Test extends TestCase
         $target = Year::create(['year' => 2023, 'label' => 'Locro 2023', 'is_active' => false]);
 
         $material = $this->createMaterial([
-            'year_id'       => $source->id,
-            'title'         => 'Flyer histórico',
-            'description'   => 'Descripción reutilizable',
-            'notes'         => 'Observación de 2022',
+            'year_id' => $source->id,
+            'title' => 'Flyer histórico',
+            'description' => 'Descripción reutilizable',
+            'notes' => 'Observación de 2022',
             'material_date' => '2022-07-09',
         ]);
 
@@ -610,8 +618,8 @@ class PublicityPhase16Test extends TestCase
         $admin = $this->makeAdmin();
         $this->actingAs($admin)
             ->post(route('publicity.import.store', ['team' => 'publicidad']), [
-                'source_year_id'        => $source->id,
-                'target_year_id'        => $target->id,
+                'source_year_id' => $source->id,
+                'target_year_id' => $target->id,
                 'selected_material_ids' => [$m1->id],
             ])
             ->assertRedirect();

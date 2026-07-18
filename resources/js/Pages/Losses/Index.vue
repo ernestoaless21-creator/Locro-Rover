@@ -9,8 +9,10 @@ import { ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
 import LossFormModal from '@/Components/LossFormModal.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import ToastContainer from '@/Components/ToastContainer.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   losses: { type: Array, required: true },
@@ -22,6 +24,7 @@ const props = defineProps({
 const page = usePage()
 const can = (perm) => (page.props.permissions ?? []).includes(perm)
 const toast = useToast()
+const canMutateYear = useEditableYear(() => props.year)
 
 const showFormModal = ref(false)
 const editingLoss = ref(null)
@@ -65,7 +68,7 @@ function formatDate(value) {
         <div class="flex items-center gap-3">
           <YearSelector :selected-year-id="year.id" />
           <button
-            v-if="can('perdidas.gestionar')"
+            v-if="can('perdidas.gestionar') && canMutateYear"
             type="button"
             class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap"
             @click="openCreate"
@@ -77,6 +80,8 @@ function formatDate(value) {
     </template>
 
     <div class="py-6 max-w-4xl mx-auto px-4 space-y-4">
+      <HistoricalEditionBanner :year="year" />
+
       <div class="bg-gray-900 text-white rounded-lg p-4 flex justify-between items-center">
         <span class="text-sm text-gray-400">Total de porciones perdidas en esta edición</span>
         <span class="text-2xl font-semibold">{{ totalPortions }}</span>
@@ -106,7 +111,7 @@ function formatDate(value) {
               <td class="p-2 text-gray-400">{{ formatDate(loss.created_at) }}</td>
               <td class="p-2 flex gap-3">
                 <button
-                  v-if="can('perdidas.gestionar')"
+                  v-if="can('perdidas.gestionar') && canMutateYear"
                   type="button"
                   class="text-gray-300 hover:text-white"
                   @click="openEdit(loss)"
@@ -114,7 +119,7 @@ function formatDate(value) {
                   Editar
                 </button>
                 <button
-                  v-if="can('perdidas.gestionar')"
+                  v-if="can('perdidas.gestionar') && canMutateYear"
                   type="button"
                   class="text-red-400 hover:text-red-300"
                   @click="destroyOne(loss)"
@@ -128,7 +133,7 @@ function formatDate(value) {
                 <p class="text-2xl mb-1">🫗</p>
                 <p class="text-gray-300 font-medium">Todavía no hay pérdidas registradas en esta edición.</p>
                 <p class="text-xs mt-1">Mejor así — anotá si se llega a perder alguna porción.</p>
-                <button v-if="can('perdidas.gestionar')" type="button" class="text-blue-400 block mt-2 mx-auto" @click="openCreate">
+                <button v-if="can('perdidas.gestionar') && canMutateYear" type="button" class="text-blue-400 block mt-2 mx-auto" @click="openCreate">
                   Registrar la primera
                 </button>
               </td>

@@ -45,6 +45,8 @@ class YearController extends Controller
      */
     public function update(UpdateYearRequest $request, Year $year, PricingService $pricing): RedirectResponse
     {
+        Gate::authorize('mutate', $year);
+
         $data = $request->validated();
         $shouldRecalculate = (bool) ($data['recalculate_orders'] ?? false);
         unset($data['recalculate_orders']); // no es una columna de years, nunca se manda a Year::update()

@@ -33,19 +33,19 @@ class MeetingController extends Controller
             ->orderBy('id')
             ->get()
             ->map(fn (Meeting $m) => [
-                'id'             => $m->id,
-                'title'          => $m->title,
-                'date'           => $m->date->toDateString(),
+                'id' => $m->id,
+                'title' => $m->title,
+                'date' => $m->date->toDateString(),
                 'secretary_name' => $m->secretary_name,
-                'creator'        => $m->creator ? ['name' => $m->creator->name] : null,
+                'creator' => $m->creator ? ['name' => $m->creator->name] : null,
             ]);
 
         $years = Year::orderByDesc('year')->get(['id', 'year', 'label']);
 
         return Inertia::render('Meetings/Index', [
-            'meetings'  => $meetings,
-            'year'      => $year->only('id', 'year', 'label'),
-            'years'     => $years,
+            'meetings' => $meetings,
+            'year' => $year->only('id', 'year', 'label'),
+            'years' => $years,
             'canManage' => $request->user()->can('actas.gestionar'),
         ]);
     }
@@ -68,8 +68,8 @@ class MeetingController extends Controller
             ->get(['id', 'name', 'team', 'file_name', 'file_size', 'mime_type']);
 
         return Inertia::render('Meetings/Create', [
-            'year'               => $year->only('id', 'year', 'label'),
-            'activeUsers'        => $activeUsers,
+            'year' => $year->only('id', 'year', 'label'),
+            'activeUsers' => $activeUsers,
             'availableDocuments' => $availableDocuments,
         ]);
     }
@@ -83,6 +83,7 @@ class MeetingController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $meeting = $this->service->create($data, $year->id, $request->user()->id);
 
@@ -101,6 +102,7 @@ class MeetingController extends Controller
             'decisions',
             'attendances',
             'documents.uploader:id,name',
+            'year',
         ]);
 
         $availableDocuments = TeamDocument::with('uploader:id,name')
@@ -111,11 +113,12 @@ class MeetingController extends Controller
             ->makeHidden(['file_path']);
 
         return Inertia::render('Meetings/Show', [
-            'meeting'            => $this->formatMeeting($meeting),
+            'meeting' => $this->formatMeeting($meeting),
+            'year' => $meeting->year->only(['id', 'year', 'label', 'is_active']),
             'decisionCategories' => MeetingDecision::CATEGORIES,
-            'decisionTeams'      => MeetingDecision::TEAMS,
+            'decisionTeams' => MeetingDecision::TEAMS,
             'availableDocuments' => $availableDocuments,
-            'canManage'          => $request->user()->can('actas.gestionar'),
+            'canManage' => $request->user()->can('actas.gestionar'),
         ]);
     }
 
@@ -123,7 +126,7 @@ class MeetingController extends Controller
     {
         Gate::authorize('actas.gestionar');
 
-        $meeting->load('attendances');
+        $meeting->load('attendances', 'year');
 
         $activeUsers = User::where('is_active', true)
             ->orderBy('name')
@@ -131,9 +134,9 @@ class MeetingController extends Controller
 
         // Incluir usuarios inactivos que estén en registros de asistencia
         // para que no desaparezcan del formulario de edición
-        $existingUserIds  = $meeting->attendances->pluck('user_id')->filter()->all();
-        $activeUserIds    = $activeUsers->pluck('id')->all();
-        $extraIds         = array_diff($existingUserIds, $activeUserIds);
+        $existingUserIds = $meeting->attendances->pluck('user_id')->filter()->all();
+        $activeUserIds = $activeUsers->pluck('id')->all();
+        $extraIds = array_diff($existingUserIds, $activeUserIds);
 
         $extraUsers = $extraIds
             ? User::whereIn('id', $extraIds)->orderBy('name')->get(['id', 'name'])
@@ -143,17 +146,18 @@ class MeetingController extends Controller
 
         return Inertia::render('Meetings/Edit', [
             'meeting' => [
-                'id'               => $meeting->id,
-                'title'            => $meeting->title,
-                'date'             => $meeting->date->toDateString(),
-                'development'      => $meeting->development,
-                'secretary_id'     => $meeting->secretary_id,
+                'id' => $meeting->id,
+                'title' => $meeting->title,
+                'date' => $meeting->date->toDateString(),
+                'development' => $meeting->development,
+                'secretary_id' => $meeting->secretary_id,
                 'otros_asistentes' => $meeting->otros_asistentes,
-                'attendances'      => $meeting->attendances->map(fn (MeetingAttendance $a) => [
-                    'user_id'    => $a->user_id,
+                'attendances' => $meeting->attendances->map(fn (MeetingAttendance $a) => [
+                    'user_id' => $a->user_id,
                     'is_present' => $a->is_present,
                 ])->values(),
             ],
+            'year' => $meeting->year->only(['id', 'year', 'label', 'is_active']),
             'activeUsers' => $allUsers,
         ]);
     }
@@ -161,6 +165,7 @@ class MeetingController extends Controller
     public function update(Request $request, Meeting $meeting): RedirectResponse
     {
         Gate::authorize('actas.gestionar');
+        Gate::authorize('mutate', $meeting->year);
 
         $data = $this->validateMeeting($request);
         $this->service->update($meeting, $data);
@@ -172,6 +177,7 @@ class MeetingController extends Controller
     public function destroy(Meeting $meeting): RedirectResponse
     {
         Gate::authorize('actas.gestionar');
+        Gate::authorize('mutate', $meeting->year);
 
         $this->service->delete($meeting);
 
@@ -182,51 +188,51 @@ class MeetingController extends Controller
     private function validateMeeting(Request $request): array
     {
         return $request->validate([
-            'title'            => ['required', 'string', 'max:255'],
-            'date'             => ['required', 'date'],
-            'development'      => ['nullable', 'string'],
-            'secretary_id'     => ['nullable', 'integer', 'exists:users,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'date' => ['required', 'date'],
+            'development' => ['nullable', 'string'],
+            'secretary_id' => ['nullable', 'integer', 'exists:users,id'],
             'otros_asistentes' => ['nullable', 'string', 'max:2000'],
-            'attendances'      => ['nullable', 'array'],
-            'attendances.*.user_id'    => ['required', 'integer', 'exists:users,id'],
+            'attendances' => ['nullable', 'array'],
+            'attendances.*.user_id' => ['required', 'integer', 'exists:users,id'],
             'attendances.*.is_present' => ['required', 'boolean'],
-            'document_ids'     => ['nullable', 'array'],
-            'document_ids.*'   => ['integer', 'exists:team_documents,id'],
-            'year_id'          => ['nullable', 'integer', 'exists:years,id'],
+            'document_ids' => ['nullable', 'array'],
+            'document_ids.*' => ['integer', 'exists:team_documents,id'],
+            'year_id' => ['nullable', 'integer', 'exists:years,id'],
         ]);
     }
 
     private function formatMeeting(Meeting $meeting): array
     {
         $presentes = $meeting->attendances->where('is_present', true)->pluck('user_name')->sort()->values()->all();
-        $ausentes  = $meeting->attendances->where('is_present', false)->pluck('user_name')->sort()->values()->all();
+        $ausentes = $meeting->attendances->where('is_present', false)->pluck('user_name')->sort()->values()->all();
 
         return [
-            'id'               => $meeting->id,
-            'title'            => $meeting->title,
-            'date'             => $meeting->date->toDateString(),
-            'development'      => $meeting->development,
-            'secretary_name'   => $meeting->secretary_name,
+            'id' => $meeting->id,
+            'title' => $meeting->title,
+            'date' => $meeting->date->toDateString(),
+            'development' => $meeting->development,
+            'secretary_name' => $meeting->secretary_name,
             'otros_asistentes' => $meeting->otros_asistentes,
-            'presentes'        => $presentes,
-            'ausentes'         => $ausentes,
-            'creator'          => $meeting->creator ? ['name' => $meeting->creator->name] : null,
-            'decisions'        => $meeting->decisions->map(fn (MeetingDecision $d) => [
-                'id'            => $d->id,
-                'text'          => $d->text,
-                'category'      => $d->category,
+            'presentes' => $presentes,
+            'ausentes' => $ausentes,
+            'creator' => $meeting->creator ? ['name' => $meeting->creator->name] : null,
+            'decisions' => $meeting->decisions->map(fn (MeetingDecision $d) => [
+                'id' => $d->id,
+                'text' => $d->text,
+                'category' => $d->category,
                 'categoryLabel' => MeetingDecision::CATEGORIES[$d->category] ?? $d->category,
-                'team'          => $d->team,
-                'sort_order'    => $d->sort_order,
+                'team' => $d->team,
+                'sort_order' => $d->sort_order,
             ])->values(),
             'documents' => $meeting->documents->map(fn (TeamDocument $doc) => [
-                'id'        => $doc->id,
-                'name'      => $doc->name,
+                'id' => $doc->id,
+                'name' => $doc->name,
                 'file_name' => $doc->file_name,
                 'file_size' => $doc->file_size,
                 'mime_type' => $doc->mime_type,
-                'team'      => $doc->team,
-                'uploader'  => $doc->uploader ? ['name' => $doc->uploader->name] : null,
+                'team' => $doc->team,
+                'uploader' => $doc->uploader ? ['name' => $doc->uploader->name] : null,
             ])->values(),
         ];
     }

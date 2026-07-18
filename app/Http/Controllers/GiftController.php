@@ -46,6 +46,8 @@ class GiftController extends Controller
 
     public function store(StoreGiftRequest $request): RedirectResponse|JsonResponse
     {
+        Gate::authorize('mutate', Year::findOrFail($request->validated('year_id')));
+
         $gift = Gift::create([
             ...$request->validated(),
             'created_by' => $request->user()->id,
@@ -60,6 +62,8 @@ class GiftController extends Controller
 
     public function update(UpdateGiftRequest $request, Gift $gift): RedirectResponse|JsonResponse
     {
+        Gate::authorize('mutate', $gift->year);
+
         $gift->update($request->validated());
 
         if ($request->wantsJson()) {
@@ -72,6 +76,7 @@ class GiftController extends Controller
     public function destroy(Request $request, Gift $gift): RedirectResponse
     {
         Gate::authorize('regalos.gestionar');
+        Gate::authorize('mutate', $gift->year);
 
         $gift->delete();
 

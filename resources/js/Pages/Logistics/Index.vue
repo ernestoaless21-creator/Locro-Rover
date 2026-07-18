@@ -3,7 +3,9 @@ import { ref, computed } from 'vue'
 import { Head, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import YearSelector from '@/Components/YearSelector.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   team:       { type: String,  required: true },
@@ -14,6 +16,8 @@ const props = defineProps({
 })
 
 const toast = useToast()
+const canMutateYear = useEditableYear(() => props.year)
+const canManageNow = computed(() => props.canManage && canMutateYear.value)
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
@@ -156,11 +160,14 @@ function destroyRecord(r) {
     <div class="py-8 max-w-3xl mx-auto px-4">
 
       <!-- Año + navegación -->
-      <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <YearSelector :selected-year-id="year.id" />
-        <a v-if="canManage" :href="route('logistics.import', { team, target_year_id: year.id })" class="text-sm text-indigo-600 hover:text-indigo-800">
-          Importar desde otra edición
-        </a>
+      <div class="mb-6 space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <YearSelector :selected-year-id="year.id" />
+          <a v-if="canManage" :href="route('logistics.import', { team, target_year_id: year.id })" class="text-sm text-indigo-600 hover:text-indigo-800">
+            Importar desde otra edición
+          </a>
+        </div>
+        <HistoricalEditionBanner :year="year" />
       </div>
 
       <!-- Filtros -->
@@ -176,7 +183,7 @@ function destroyRecord(r) {
       </div>
 
       <!-- Subir material -->
-      <div v-if="canManage" class="mb-6">
+      <div v-if="canManageNow" class="mb-6">
         <button v-if="!showUploadForm" type="button" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium" @click="showUploadForm = true">
           + Subir material
         </button>
@@ -307,7 +314,7 @@ function destroyRecord(r) {
                 <a :href="route('logistics.download', { team, record: r.id })" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
                   Descargar
                 </a>
-                <template v-if="canManage">
+                <template v-if="canManageNow">
                   <span class="text-gray-200">|</span>
                   <button type="button" class="text-xs text-gray-400 hover:text-indigo-600" @click="startEdit(r)">Editar</button>
                   <span class="text-gray-200">|</span>

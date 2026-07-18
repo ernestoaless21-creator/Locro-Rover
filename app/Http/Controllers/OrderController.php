@@ -50,6 +50,9 @@ class OrderController extends Controller
         // Fase 7 (correccion 4), seccion 3: mismo gate que ya usa
         // DashboardController para la recaudacion global.
         $canViewFinancials = Gate::allows('viewGlobalFinancials', Order::class);
+        // Fase 9 (correccion): mismo gate que usa el Dashboard para
+        // gifted_portions/lost_portions (ver compactCounters mas abajo).
+        $canViewProduction = $user->can('produccion.ver');
 
         $orders = Order::query()
             ->with(['client:id,first_name,last_name,phone', 'rover:id,name', 'withdrawnBy:id,name', 'items', 'payments'])
@@ -168,7 +171,7 @@ class OrderController extends Controller
             // sin importar los filtros de la tabla ni el estado de pago (ver
             // seccion 11 del prompt: "esten pagos o no"). Misma base/criterio
             // que usa el Dashboard, para no tener dos formulas distintas.
-            'counters' => $this->compactCounters($year, $user, $canViewAll, $canViewFinancials),
+            'counters' => $this->compactCounters($year, $user, $canViewAll, $canViewFinancials, $canViewProduction),
             // Fase 7 (correccion 4), seccion 2: los badges de Regalos/Perdidas
             // solo son CLICKEABLES si el usuario tiene el permiso real de
             // gestionarlos (mismo permiso que ya gatea esos botones en el
@@ -190,16 +193,16 @@ class OrderController extends Controller
      * fuente de verdad de atribucion personal (Order::rover_id, ver decision
      * de arquitectura de la seccion 6).
      *
-     * "Numero de regalos/perdidas" (seccion 2 del prompt de esta correccion):
-     * se interpreta como CANTIDAD DE REGISTROS cargados (cuantos regalos/
-     * perdidas se registraron), no la suma de porciones — esa suma
-     * (`gifted_portions`/`lost_portions`) ya es una metrica sensible y
-     * distinta que el Dashboard gatea con 'produccion.ver' (revela stock).
-     * Un simple conteo de registros no revela produccion/stock, por eso NO
-     * se gatea con ese permiso: el prompt los agrupa junto a porciones/
-     * salsas/mis ventas, visibles para cualquier usuario operativo, a
-     * diferencia de la recaudacion (seccion 3), que si esta explicitamente
-     * restringida a Logistica/Admin.
+     * "Regalos/perdidas" (Fase 9, correccion de UX): el indicador muestra la
+     * SUMA de porciones (`gifted_portions`/`lost_portions`), no la cantidad
+     * de registros — un regalo de 2 porciones a Josefina + uno de 2 a
+     * Carsten debe verse como "4", no como "2 regalos". Esa suma es
+     * exactamente la misma metrica sensible que el Dashboard expone en su
+     * bloque de produccion real, gateada con 'produccion.ver' (revela
+     * stock/produccion). Por eso, a diferencia del criterio anterior
+     * (conteo de registros, que no era sensible y no se gateaba), ahora SI
+     * se gatea con ese permiso: si el usuario no lo tiene, ninguna de las
+     * dos claves se agrega al array y el frontend no muestra el indicador.
      *
      * La recaudacion reutiliza EXACTAMENTE la misma consulta ya validada de
      * DashboardController::index (Payment agrupado por payment_method_id
@@ -207,7 +210,7 @@ class OrderController extends Controller
      * `slug` real de PaymentMethod ('efectivo'/'transferencia', ver
      * RolesAndPermissionsSeeder) en vez de asumir nombres o ids fijos.
      */
-    protected function compactCounters(Year $year, User $user, bool $canViewAll, bool $canViewFinancials): array
+    protected function compactCounters(Year $year, User $user, bool $canViewAll, bool $canViewFinancials, bool $canViewProduction): array
     {
         $activeBase = Order::query()
             ->where('year_id', $year->id)
@@ -221,9 +224,6 @@ class OrderController extends Controller
             ->whereIn('order_id', (clone $activeBase)->select('id'))
             ->sum('quantity');
 
-        $giftsCount = (int) Gift::query()->where('year_id', $year->id)->count();
-        $lossesCount = (int) Loss::query()->where('year_id', $year->id)->count();
-
         // Fase 8 (correccion): contadores de retiro para los indicadores
         // clickeables "Por retirar" y "Retiradas". Misma base que el resto:
         // pedidos no cancelados, respetando el scope de canViewAll.
@@ -234,11 +234,14 @@ class OrderController extends Controller
             'portions_total' => $portionsTotal,
             'sauces_total' => $saucesTotal,
             'my_portions' => $personalPortions,
-            'gifts_count' => $giftsCount,
-            'losses_count' => $lossesCount,
             'portions_pending_withdrawal' => $portionsPendingWithdrawal,
             'portions_withdrawn' => $portionsWithdrawn,
         ];
+
+        if ($canViewProduction) {
+            $counters['gifted_portions'] = (int) Gift::query()->where('year_id', $year->id)->sum('quantity');
+            $counters['lost_portions'] = (int) Loss::query()->where('year_id', $year->id)->sum('quantity');
+        }
 
         if ($canViewFinancials) {
             // Misma consulta que DashboardController::index (financials.by_method):
@@ -361,6 +364,13 @@ class OrderController extends Controller
             ? Year::findOrFail($data['year_id'])
             : Year::where('is_active', true)->firstOrFail();
         $data['year_id'] = $year->id;
+
+        // Fase 19: defensa en profundidad -- la resolucion de arriba ya
+        // garantiza que $year sea editable por este usuario (activa, o
+        // explicitamente elegida por alguien con 'anios.gestionar'), pero se
+        // re-chequea con la misma regla centralizada que el resto de la app
+        // para no depender unicamente de esta logica puntual.
+        Gate::authorize('mutate', $year);
 
         // Fase 6A: un pedido nuevo nace "sin responsable" hasta que se le
         // asigna uno. Si no se manda rover_id (o se manda el propio), es una
@@ -516,6 +526,13 @@ class OrderController extends Controller
      */
     public function update(UpdateOrderRequest $request, Order $order, PricingService $pricing, ClientAssignmentService $assignments): RedirectResponse
     {
+        // Fase 19: una edicion que no es la activa es de solo lectura salvo
+        // para 'anios.gestionar' (ver Year::isEditableBy). Se chequea contra
+        // el year_id ACTUAL del pedido, no el que eventualmente llegue en el
+        // payload (cambiar de edicion ya requiere 'anios.gestionar' aparte,
+        // ver el bloque de abajo).
+        Gate::authorize('mutate', $order->year);
+
         $data = $request->validated();
 
         // Fase 18.1: cambiar la edicion de un pedido ya creado es la misma
@@ -586,6 +603,7 @@ class OrderController extends Controller
     public function destroy(Request $request, Order $order): RedirectResponse|JsonResponse
     {
         Gate::authorize('delete', $order);
+        Gate::authorize('mutate', $order->year);
 
         $order->delete();
 
@@ -604,6 +622,8 @@ class OrderController extends Controller
      */
     public function updatePortions(UpdatePortionsRequest $request, Order $order, PricingService $pricing): JsonResponse
     {
+        Gate::authorize('mutate', $order->year);
+
         $pricing->syncPortionsForOrder($order, $request->validated('portions'), $order->year, $request->user()->id);
 
         return response()->json([

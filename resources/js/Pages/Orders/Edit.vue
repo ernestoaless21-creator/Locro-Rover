@@ -26,7 +26,9 @@ import PrimaryButton from '@/Components/PrimaryButton.vue'
 import SecondaryButton from '@/Components/SecondaryButton.vue'
 import DangerButton from '@/Components/DangerButton.vue'
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'
+import HistoricalEditionBanner from '@/Components/HistoricalEditionBanner.vue'
 import { useToast } from '@/Composables/useToast'
+import { useEditableYear } from '@/Composables/useEditableYear'
 
 const props = defineProps({
   order: { type: Object, required: true },
@@ -71,6 +73,11 @@ function selfAssignRover() {
 
 const order = ref({ ...props.order })
 const items = ref([...props.order.items])
+
+// Fase 19: la edicion de este pedido nunca cambia mientras se edita (ver
+// docblock de OrderController::update sobre canChooseYear); alcanza con
+// evaluarla una vez sobre el year cargado por el backend.
+const canMutateYear = useEditableYear(() => props.order.year)
 
 const locroItem = computed(() => items.value.find((i) => i.product === 'locro' && i.type === 'normal'))
 const saucesItem = computed(() => items.value.find((i) => i.product === 'salsas' && i.type === 'normal'))
@@ -284,13 +291,16 @@ async function confirmDeleteOrder() {
     </template>
 
     <div class="py-8 max-w-2xl mx-auto px-4 space-y-4">
+      <HistoricalEditionBanner :year="order.year" />
+
       <!-- Porciones (edicion rapida) -->
       <div class="bg-gray-900 text-white rounded-lg p-5 space-y-4">
         <label class="text-sm text-gray-400 block mb-1">Cantidad de porciones de locro</label>
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="w-10 h-10 shrink-0 rounded-md bg-gray-800 border border-gray-600 text-lg leading-none hover:bg-gray-700"
+            class="w-10 h-10 shrink-0 rounded-md bg-gray-800 border border-gray-600 text-lg leading-none hover:bg-gray-700 disabled:opacity-50"
+            :disabled="!canMutateYear"
             @click="decPortions"
           >
             −
@@ -299,11 +309,13 @@ async function confirmDeleteOrder() {
             v-model.number="portions"
             type="number"
             min="0"
-            class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-lg text-center"
+            class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-lg text-center disabled:opacity-50"
+            :disabled="!canMutateYear"
           />
           <button
             type="button"
-            class="w-10 h-10 shrink-0 rounded-md bg-gray-800 border border-gray-600 text-lg leading-none hover:bg-gray-700"
+            class="w-10 h-10 shrink-0 rounded-md bg-gray-800 border border-gray-600 text-lg leading-none hover:bg-gray-700 disabled:opacity-50"
+            :disabled="!canMutateYear"
             @click="incPortions"
           >
             +
@@ -359,7 +371,7 @@ async function confirmDeleteOrder() {
           </div>
           <div v-if="canAssignRover">
             <label class="text-sm text-gray-400 block mb-1">Rover responsable</label>
-            <select v-model="roverId" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm">
+            <select v-model="roverId" :disabled="!canMutateYear" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm disabled:opacity-50">
               <option v-for="r in rovers" :key="r.id" :value="r.id">{{ r.name }}</option>
             </select>
           </div>
@@ -367,6 +379,7 @@ async function confirmDeleteOrder() {
             <label class="text-sm text-gray-400 block mb-1">Responsable</label>
             <p class="text-yellow-400 text-sm mb-1">Sin asignar</p>
             <button
+              v-if="canMutateYear"
               type="button"
               class="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs px-3 py-1.5 rounded-md"
               :disabled="savingSelfAssign"
@@ -381,7 +394,7 @@ async function confirmDeleteOrder() {
           </div>
           <div>
             <label class="text-sm text-gray-400 block mb-1">Estado</label>
-            <select v-model="status" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm">
+            <select v-model="status" :disabled="!canMutateYear" class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm disabled:opacity-50">
               <option value="pendiente">Pendiente</option>
               <option value="confirmado">Confirmado</option>
               <option value="cancelado">Cancelado</option>
@@ -391,7 +404,7 @@ async function confirmDeleteOrder() {
 
         <div>
           <div class="flex items-center gap-2">
-            <input id="is_delivery" v-model="isDelivery" type="checkbox" />
+            <input id="is_delivery" v-model="isDelivery" type="checkbox" :disabled="!canMutateYear" />
             <label for="is_delivery" class="text-sm text-gray-300">Es delivery</label>
           </div>
           <p class="text-xs text-gray-500 mt-1">Sin marcar: el cliente retira en mano.</p>
@@ -401,7 +414,8 @@ async function confirmDeleteOrder() {
             <input
               v-model="deliveryAddress"
               type="text"
-              class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm"
+              :disabled="!canMutateYear"
+              class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm disabled:opacity-50"
               placeholder="Dirección de entrega para este pedido"
             />
             <p class="text-xs text-yellow-400">
@@ -416,21 +430,22 @@ async function confirmDeleteOrder() {
           <textarea
             v-model="observations"
             rows="2"
-            class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm"
+            :disabled="!canMutateYear"
+            class="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-sm disabled:opacity-50"
             placeholder="Opcional"
           ></textarea>
         </div>
 
         <div class="flex justify-between items-center pt-2">
           <button
-            v-if="canDelete"
+            v-if="canDelete && canMutateYear"
             type="button"
             class="text-red-400 hover:text-red-300 text-sm"
             @click="requestDeleteOrder($event)"
           >
             Eliminar pedido
           </button>
-          <PrimaryButton :disabled="savingGeneral" @click="saveGeneral">
+          <PrimaryButton :disabled="savingGeneral || !canMutateYear" @click="saveGeneral">
             {{ savingGeneral ? 'Guardando...' : 'Guardar datos generales' }}
           </PrimaryButton>
         </div>
@@ -460,7 +475,7 @@ async function confirmDeleteOrder() {
               <span class="flex items-center gap-3">
                 {{ money(item.line_total) }}
                 <button
-                  v-if="canExceptionalPrice"
+                  v-if="canExceptionalPrice && canMutateYear"
                   type="button"
                   class="text-red-400 hover:text-red-300 disabled:opacity-40 text-xs"
                   :disabled="advancedBusy"
@@ -486,7 +501,7 @@ async function confirmDeleteOrder() {
               <span class="flex items-center gap-3">
                 {{ money(item.line_total) }}
                 <button
-                  v-if="canExceptionalPrice"
+                  v-if="canExceptionalPrice && canMutateYear"
                   type="button"
                   class="text-blue-400 hover:text-blue-300 disabled:opacity-40 text-xs"
                   :disabled="advancedBusy"
@@ -507,7 +522,7 @@ async function confirmDeleteOrder() {
             </div>
           </div>
 
-          <OrderLineForm v-if="canExceptionalPrice && editingItemId === null && yearId" :year-id="yearId" :disabled="savingAdvancedItem" @submit="addAdvancedItem" />
+          <OrderLineForm v-if="canExceptionalPrice && canMutateYear && editingItemId === null && yearId" :year-id="yearId" :disabled="savingAdvancedItem" @submit="addAdvancedItem" />
         </div>
       </div>
 
@@ -516,7 +531,7 @@ async function confirmDeleteOrder() {
         <div class="flex justify-between items-center">
           <h3 class="text-sm text-gray-400">Pagos registrados</h3>
           <button
-            v-if="canRegisterPayment"
+            v-if="canRegisterPayment && canMutateYear"
             type="button"
             class="bg-green-600 hover:bg-green-500 px-3 py-1 rounded-md text-sm"
             @click="rememberTrigger($event); showPayModal = true"
@@ -534,7 +549,7 @@ async function confirmDeleteOrder() {
       <!-- Retiro / Rover -->
       <div class="bg-gray-900 text-white rounded-lg p-5 flex flex-wrap gap-3">
         <button
-          v-if="canWithdraw && order.withdrawal_status !== 'retirado'"
+          v-if="canWithdraw && canMutateYear && order.withdrawal_status !== 'retirado'"
           type="button"
           class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-md text-sm"
           @click="rememberTrigger($event); showWithdrawModal = true"
@@ -547,7 +562,7 @@ async function confirmDeleteOrder() {
         </span>
 
         <button
-          v-if="canAssignRover"
+          v-if="canAssignRover && canMutateYear"
           type="button"
           class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-md text-sm"
           @click="rememberTrigger($event); showAssignModal = true"

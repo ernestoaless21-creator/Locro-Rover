@@ -20,23 +20,24 @@ class TeamDocumentController extends Controller
         $this->authorizeTeamAccess($request, $team);
 
         $data = $request->validate([
-            'name'        => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
-            'file'        => ['required', 'file', 'max:10240'], // 10 MB
-            'year_id'     => ['nullable', 'integer', 'exists:years,id'],
+            'file' => ['required', 'file', 'max:10240'], // 10 MB
+            'year_id' => ['nullable', 'integer', 'exists:years,id'],
         ]);
 
         $year = isset($data['year_id'])
             ? Year::findOrFail($data['year_id'])
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         $this->documentService->store(
-            file:        $request->file('file'),
-            team:        $team,
-            yearId:      $year->id,
-            name:        $data['name'],
+            file: $request->file('file'),
+            team: $team,
+            yearId: $year->id,
+            name: $data['name'],
             description: $data['description'] ?? null,
-            uploadedBy:  $request->user()->id,
+            uploadedBy: $request->user()->id,
         );
 
         return back()->with('success', 'Documento subido.');
@@ -47,9 +48,10 @@ class TeamDocumentController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         abort_unless($doc->team === $team, 404);
+        Gate::authorize('mutate', $doc->year);
 
         $data = $request->validate([
-            'name'        => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -72,6 +74,7 @@ class TeamDocumentController extends Controller
         Gate::authorize('tareas.gestionar-propio-equipo');
         $this->authorizeTeamAccess($request, $team);
         abort_unless($doc->team === $team, 404);
+        Gate::authorize('mutate', $doc->year);
 
         $this->documentService->delete($doc);
 

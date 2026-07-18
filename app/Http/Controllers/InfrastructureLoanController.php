@@ -19,10 +19,11 @@ class InfrastructureLoanController extends Controller
         $year = $request->filled('year_id')
             ? Year::findOrFail($request->year_id)
             : Year::where('is_active', true)->firstOrFail();
+        Gate::authorize('mutate', $year);
 
         InfrastructureLoan::create([
             ...$data,
-            'year_id'    => $year->id,
+            'year_id' => $year->id,
             'created_by' => $request->user()->id,
         ]);
 
@@ -32,6 +33,7 @@ class InfrastructureLoanController extends Controller
     public function update(Request $request, string $team, InfrastructureLoan $loan): RedirectResponse
     {
         Gate::authorize('infraestructura.inventario.gestionar');
+        Gate::authorize('mutate', $loan->year);
 
         $data = $this->validateLoan($request);
 
@@ -43,6 +45,7 @@ class InfrastructureLoanController extends Controller
     public function destroy(string $team, InfrastructureLoan $loan): RedirectResponse
     {
         Gate::authorize('infraestructura.inventario.gestionar');
+        Gate::authorize('mutate', $loan->year);
 
         $loan->delete();
 
@@ -58,14 +61,15 @@ class InfrastructureLoanController extends Controller
     public function updateStatus(Request $request, string $team, InfrastructureLoan $loan): RedirectResponse
     {
         Gate::authorize('infraestructura.inventario.gestionar');
+        Gate::authorize('mutate', $loan->year);
 
         $data = $request->validate([
-            'status'      => ['required', 'in:pending,returned'],
+            'status' => ['required', 'in:pending,returned'],
             'returned_at' => ['nullable', 'date'],
         ]);
 
         $loan->update([
-            'status'      => $data['status'],
+            'status' => $data['status'],
             'returned_at' => $data['status'] === 'returned' ? ($data['returned_at'] ?? $loan->returned_at) : null,
         ]);
 
@@ -76,8 +80,8 @@ class InfrastructureLoanController extends Controller
     {
         $rules = [
             'quantity' => ['required', 'integer', 'min:1'],
-            'lender'   => ['required', 'string', 'max:255'],
-            'notes'    => ['nullable', 'string'],
+            'lender' => ['required', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
         ];
 
         if ($requireItem) {
