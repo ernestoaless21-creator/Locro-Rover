@@ -70,6 +70,7 @@ const navGroups = computed(() => {
                 can('cronograma.ver') && { label: 'Cronograma', href: route('schedule.index'), active: route().current('schedule.*') },
                 can('usuarios.gestionar') && { label: 'Usuarios', href: route('users.index'), active: route().current('users.*') },
                 can('parametros.gestionar') && { label: 'Parámetros', href: route('parameters.index'), active: route().current('parameters.*') },
+                can('historico.importar') && { label: 'Importaciones', href: route('imports.create'), active: route().current('imports.*') },
             ].filter(Boolean),
         },
     ];

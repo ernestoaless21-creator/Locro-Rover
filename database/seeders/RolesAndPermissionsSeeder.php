@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Support\Facades\Hash;
 use App\Models\PaymentMethod;
 use App\Models\User;
 use App\Models\Year;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -98,6 +98,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'anios.gestionar',
             'documentos.gestionar',
             'auditoria.ver',
+            // Fase P2: importacion masiva de clientes/pedidos desde Excel.
+            'historico.importar',
         ];
 
         foreach ($permissions as $permission) {
@@ -171,6 +173,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'parametros.gestionar', 'anios.gestionar', 'documentos.gestionar', 'auditoria.ver',
             'actas.gestionar',
             'cronograma.gestionar',
+            'historico.importar',
         ]);
 
         $logistica = Role::firstOrCreate(['name' => 'logistica', 'guard_name' => 'web']);
@@ -195,9 +198,9 @@ class RolesAndPermissionsSeeder extends Seeder
         // uno solo) y quedan fuera del alcance de este cambio.
         foreach (['compras', 'infraestructura', 'publicidad'] as $team) {
             $teamToolPermissions = match ($team) {
-                'compras'         => ['compras.planificacion.gestionar', 'proveedores.gestionar'],
+                'compras' => ['compras.planificacion.gestionar', 'proveedores.gestionar'],
                 'infraestructura' => ['infraestructura.inventario.gestionar'],
-                default           => [],
+                default => [],
             };
 
             $jefeRole = Role::firstOrCreate(['name' => "jefe_{$team}", 'guard_name' => 'web']);
@@ -230,6 +233,15 @@ class RolesAndPermissionsSeeder extends Seeder
             );
         }
 
+        // Fase P2: Mercado Pago, usado por el importador historico (ver
+        // LegacyExcelImportAdapter). Slug explicito con guion bajo (no
+        // str()->slug(), que daria "mercado-pago" con guion medio) para que
+        // coincida exactamente con el slug que espera el importador.
+        PaymentMethod::firstOrCreate(
+            ['slug' => 'mercado_pago'],
+            ['name' => 'Mercado Pago', 'is_active' => true]
+        );
+
         // Anio activo por defecto (ajustar el numero real antes de usar en produccion).
         $currentYear = (int) date('Y');
         Year::firstOrCreate(
@@ -238,10 +250,10 @@ class RolesAndPermissionsSeeder extends Seeder
         );
 
         $adminUser = User::firstOrCreate(['email' => env('ADMIN_EMAIL')],
-        ['name' => env('ADMIN_NAME', 'Administrador'),
-        'password' => Hash::make(env('ADMIN_PASSWORD')),
-        'is_active' => true,]);
+            ['name' => env('ADMIN_NAME', 'Administrador'),
+                'password' => Hash::make(env('ADMIN_PASSWORD')),
+                'is_active' => true, ]);
 
-$adminUser->assignRole('admin');
+        $adminUser->assignRole('admin');
     }
 }

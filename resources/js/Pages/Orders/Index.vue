@@ -27,7 +27,7 @@ import EmptyState from '@/Components/EmptyState.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
-  orders: { type: Object, required: true },
+  orders: { type: Array, required: true },
   year: { type: Object, required: true },
   rovers: { type: Array, default: () => [] },
   paymentMethods: { type: Array, default: () => [] },
@@ -74,7 +74,7 @@ const activeFilterCount = computed(() => [
   props.filters.my_sales,
 ].filter(Boolean).length)
 const showFilters = ref(hasAdvancedFilters.value)
-const isFiltering = computed(() => Boolean(props.filters.search || hasAdvancedFilters.value))
+const isFiltering = computed(() => Boolean(props.filters.search || props.filters.client_id || hasAdvancedFilters.value))
 
 // Fase 18: si el estado vacio es producto de una busqueda con texto, el
 // mensaje aprovecha ese contexto (nombre buscado). Sin busqueda, se
@@ -83,9 +83,9 @@ const isFiltering = computed(() => Boolean(props.filters.search || hasAdvancedFi
 // el texto de "pedidos" por el que corresponda.
 const emptyOrdersDescription = computed(() => {
   const term = props.filters.search
-  return term
-    ? `No encontramos pedidos para "${term}". Probá cambiando los filtros o verificando el nombre.`
-    : 'Probá cambiando los filtros o... ¡salí a vender un poco más! 🍲'
+  if (term) return `No encontramos pedidos para "${term}". Probá cambiando los filtros o verificando el nombre.`
+  if (props.filters.client_id) return 'Este cliente todavía no tiene pedidos en esta edición.'
+  return 'Probá cambiando los filtros o... ¡salí a vender un poco más! 🍲'
 })
 
 const search = ref(props.filters.search ?? '')
@@ -125,7 +125,10 @@ function reloadWith(extra) {
 }
 
 function applySearch() {
-  reloadWith({ search: search.value || undefined })
+  // Una busqueda de texto (tipeada + Enter/Buscar) siempre reemplaza una
+  // seleccion exacta anterior (ver pickSuggestion): son dos modos
+  // mutuamente excluyentes, nunca se combinan.
+  reloadWith({ search: search.value || undefined, client_id: undefined })
 }
 
 // Fase 7, seccion 4: al borrar completamente el buscador, la lista se
@@ -143,7 +146,24 @@ watch(search, (value) => {
 // Client::scopeSearchTerm — nombre, apellido, nombre+apellido en cualquier
 // orden, telefono y N° historico). No se duplica backend: se reutiliza el
 // endpoint tal cual.
+//
+// BUG (Fase P2, UX): pickSuggestion() (mas abajo) escribe en `search.value`
+// para armar el termino de busqueda a partir del cliente elegido, y ESE
+// mismo cambio volvia a disparar ESTE watcher (Vue no distingue una
+// asignacion programatica de una tipeada), reabriendo el dropdown de
+// sugerencias ~250ms despues del click, tapando visualmente la tabla recien
+// filtrada (que ya habia cambiado correctamente por debajo). Con muchas
+// filas visibles (sin paginacion) el efecto es mas notorio todavia. Se
+// soluciona con un flag que salta UNA sola vez el fetch cuando el cambio
+// vino de pickSuggestion, sin tocar el resto del comportamiento (tipear
+// sigue disparando sugerencias normalmente).
+let skipNextSuggestFetch = false
 watch(search, (value) => {
+  if (skipNextSuggestFetch) {
+    skipNextSuggestFetch = false
+    return
+  }
+
   clearTimeout(suggestDebounce)
   const term = value.trim()
   if (term.length < 2) {
@@ -171,12 +191,20 @@ watch(search, (value) => {
 function pickSuggestion(client) {
   showSuggestions.value = false
   suggestions.value = []
-  // El N° historico es unico: filtra exactamente a ESE cliente (y, si tiene
-  // varios pedidos en esta edicion/año, a TODOS ellos), sin ambiguedad de
-  // nombres repetidos. Los demas filtros (rover, retiro, pago, año) se
-  // preservan tal cual via reloadWith/applySearch.
-  search.value = String(client.historical_number ?? `${client.first_name} ${client.last_name}`)
-  applySearch()
+  skipNextSuggestFetch = true
+  // BUG (Fase P2, UX): esto antes armaba un termino de TEXTO (nombre o N°
+  // historico) y llamaba a applySearch(), que termina en una busqueda LIKE
+  // por Client::scopeSearchTerm — esa misma busqueda tambien matchea contra
+  // el campo "telefono", asi que un N° historico corto (ej. "42") podia
+  // traer de rebote clientes cuyo TELEFONO contuviera esa secuencia. Filtrar
+  // por click en una sugerencia debe ser exacto: se manda el client_id (ver
+  // OrderController::index) en vez de reciclar el buscador de texto. El
+  // texto del input queda solo como feedback visual, nunca se envia como
+  // `search`.
+  search.value = client.historical_number
+    ? `#${client.historical_number} — ${client.first_name} ${client.last_name}`
+    : `${client.first_name} ${client.last_name}`
+  reloadWith({ client_id: client.id, search: undefined })
 }
 
 function toggleSelected(id) {
@@ -186,17 +214,17 @@ function toggleSelected(id) {
 }
 
 const allSelected = computed(() =>
-  props.orders.data.length > 0 && props.orders.data.every((o) => selected.value.has(o.id))
+  props.orders.length > 0 && props.orders.every((o) => selected.value.has(o.id))
 )
 
 function toggleSelectAll() {
   selected.value = allSelected.value
     ? new Set()
-    : new Set(props.orders.data.map((o) => o.id))
+    : new Set(props.orders.map((o) => o.id))
 }
 
 const selectedOrders = computed(() =>
-  props.orders.data.filter((o) => selected.value.has(o.id))
+  props.orders.filter((o) => selected.value.has(o.id))
 )
 
 const payAndWithdrawSummary = computed(() => {
@@ -645,7 +673,7 @@ function sauces(order) {
           </thead>
           <tbody>
             <tr
-              v-for="order in orders.data"
+              v-for="order in orders"
               :key="order.id"
               class="border-t border-gray-800 hover:bg-gray-800/60"
             >
@@ -684,7 +712,14 @@ function sauces(order) {
                 <span v-else>{{ money(order.balance_due) }}</span>
               </td>
               <td class="p-2">
-                <span class="px-2 py-0.5 rounded-full text-xs" :class="paymentStatus(order).cls">
+                <!-- Ancho fijo (no min-width) para que las 3 variantes
+                     ("Sin pagar", "Pagado", "Parcial") queden con el mismo
+                     ancho y la columna se vea alineada; whitespace-nowrap
+                     evita que "Sin pagar" se parta en dos lineas. -->
+                <span
+                  class="inline-flex items-center justify-center w-[5.5rem] px-2 py-0.5 rounded-full text-xs whitespace-nowrap"
+                  :class="paymentStatus(order).cls"
+                >
                   {{ paymentStatus(order).label }}
                 </span>
               </td>
@@ -740,7 +775,7 @@ function sauces(order) {
                 <span v-else class="text-gray-600 text-xs">—</span>
               </td>
             </tr>
-            <tr v-if="!orders.data.length">
+            <tr v-if="!orders.length">
               <td colspan="12">
                 <EmptyState
                   title="No encontramos pedidos"
@@ -759,20 +794,6 @@ function sauces(order) {
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div class="flex flex-wrap gap-2 mt-4">
-        <Link
-          v-for="link in orders.links"
-          :key="link.label"
-          :href="link.url ?? '#'"
-          v-html="link.label"
-          class="px-3 py-1 rounded-md text-sm"
-          :class="[
-            link.active ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-300',
-            !link.url ? 'opacity-40 pointer-events-none' : 'hover:bg-gray-700',
-          ]"
-        />
       </div>
     </div>
 

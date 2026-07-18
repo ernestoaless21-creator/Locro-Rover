@@ -12,6 +12,7 @@ use App\Models\Year;
 use App\Services\PricingService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -73,21 +74,21 @@ class OrderCompactIndicatorsTest extends TestCase
         $retiroResponse = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&delivery_type=retiro");
         $retiroResponse->assertOk();
         $retiroResponse->assertInertia(fn ($page) => $page
-            ->where('orders.data.0.id', $pickup->id)
-            ->where('orders.total', 1)
+            ->where('orders.0.id', $pickup->id)
+            ->has('orders', 1)
         );
 
         $deliveryResponse = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&delivery_type=delivery");
         $deliveryResponse->assertOk();
         $deliveryResponse->assertInertia(fn ($page) => $page
-            ->where('orders.data.0.id', $delivery->id)
-            ->where('orders.total', 1)
+            ->where('orders.0.id', $delivery->id)
+            ->has('orders', 1)
         );
 
         // Sin filtro: ambos pedidos.
         $allResponse = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}");
         $allResponse->assertOk();
-        $allResponse->assertInertia(fn ($page) => $page->where('orders.total', 2));
+        $allResponse->assertInertia(fn ($page) => $page->has('orders', 2));
     }
 
     public function test_delivery_type_filter_does_not_reset_other_existing_filters(): void
@@ -106,7 +107,7 @@ class OrderCompactIndicatorsTest extends TestCase
             ->where('filters.delivery_type', 'delivery')
             ->where('filters.payment_status', 'pendiente')
             ->where('filters.withdrawal_status', 'no_retirado')
-            ->where('orders.data.0.id', $delivery->id)
+            ->where('orders.0.id', $delivery->id)
         );
     }
 
@@ -130,7 +131,7 @@ class OrderCompactIndicatorsTest extends TestCase
 
     public function test_collected_breakdown_is_hidden_without_finanzas_ver_permission(): void
     {
-        $role = \Spatie\Permission\Models\Role::create(['name' => 'sin_finanzas', 'guard_name' => 'web']);
+        $role = Role::create(['name' => 'sin_finanzas', 'guard_name' => 'web']);
         $role->givePermissionTo(['pedidos.ver', 'pedidos.ver-todos']);
 
         $limited = User::factory()->create(['is_active' => true]);

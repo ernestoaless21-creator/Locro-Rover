@@ -5,10 +5,19 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
 use App\Http\Requests\UpdatePortionsRequest;
+use App\Models\Client;
+use App\Models\ClientAssignment;
+use App\Models\Gift;
+use App\Models\Loss;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\User;
 use App\Models\Year;
+use App\Services\ClientAssignmentService;
 use App\Services\PricingService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +70,14 @@ class OrderController extends Controller
                 $term = trim($request->get('search'));
                 $q->whereHas('client', fn ($cq) => $cq->searchTerm($term));
             })
+            // Fase P2 (UX): filtro EXACTO por cliente, usado cuando se elige
+            // una sugerencia del autocomplete (ver Orders/Index.vue,
+            // pickSuggestion). A proposito NO reutiliza 'search': ese es un
+            // LIKE tolerante (Client::scopeSearchTerm) que tambien matchea
+            // contra telefono, asi que un N° historico corto podia traer de
+            // rebote clientes cuyo telefono contuviera esa secuencia. client_id
+            // es una igualdad exacta, sin falsos positivos posibles.
+            ->when($request->filled('client_id'), fn ($q) => $q->where('client_id', $request->get('client_id')))
             // Fase 7 (correccion 4), seccion 4: filtro Delivery/Retiro para
             // organizar los recorridos del dia del Locro. IMPORTANTE: se
             // reutiliza take_away tal cual ya existe (ver migracion
@@ -74,7 +91,7 @@ class OrderController extends Controller
             // esta edicion. Distinto de rover_id: un cliente puede estar
             // asignado al usuario incluso si la venta la cargo otro Rover.
             ->when($request->boolean('my_assigned_clients'), function ($q) use ($user, $year) {
-                $q->whereIn('client_id', \App\Models\ClientAssignment::query()
+                $q->whereIn('client_id', ClientAssignment::query()
                     ->where('year_id', $year->id)
                     ->where('assigned_user_id', $user->id)
                     ->select('client_id')
@@ -102,8 +119,15 @@ class OrderController extends Controller
                 $q->whereHas('payments', fn ($pq) => $pq->whereHas('method', fn ($mq) => $mq->where('slug', 'transferencia')));
             })
             ->orderByDesc('created_at')
-            ->paginate(50)
-            ->withQueryString();
+            // Fase P2 (UX): se elimina la paginacion a pedido explicito del
+            // usuario (volver al comportamiento de "una sola lista larga" de
+            // la pagina anterior). $orders pasa a ser una Collection comun en
+            // vez de un LengthAwarePaginator; los filtros y el buscador
+            // siguen aplicando ANTES de esto (misma query), asi que solo
+            // devuelven las filas que ya matchean -- no se trae toda la tabla
+            // sin filtrar. Las relaciones ya venian eager-loaded arriba
+            // (client/rover/withdrawnBy/items/payments), sin cambios.
+            ->get();
 
         // Fase 7 (correccion 2), seccion 3: Client.general_notes, ClientAssignment.notes
         // (seguimiento cliente+edicion) y Order.observations (logistica de ESE pedido
@@ -113,13 +137,13 @@ class OrderController extends Controller
         // seguimiento del cliente, se adjunta aca (solo lectura) el `notes` de la
         // asignacion cliente/edicion de cada pedido, con UN solo query adicional
         // (evita N+1), sin tocar Order::observations.
-        $clientIds = collect($orders->items())->pluck('client_id')->unique();
-        $assignmentNotes = \App\Models\ClientAssignment::query()
+        $clientIds = $orders->pluck('client_id')->unique();
+        $assignmentNotes = ClientAssignment::query()
             ->where('year_id', $year->id)
             ->whereIn('client_id', $clientIds)
             ->pluck('notes', 'client_id');
 
-        $orders->getCollection()->transform(function (Order $order) use ($assignmentNotes) {
+        $orders->transform(function (Order $order) use ($assignmentNotes) {
             $order->setAttribute('client_assignment_notes', $assignmentNotes->get($order->client_id));
 
             return $order;
@@ -134,8 +158,8 @@ class OrderController extends Controller
             'rovers' => $canViewAll
                 ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'delivery_type', 'my_assigned_clients', 'my_sales', 'pending_withdrawal', 'withdrawn', 'pay_efectivo', 'pay_transferencia'),
-            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'filters' => $request->only('rover_id', 'withdrawal_status', 'status', 'payment_status', 'search', 'client_id', 'delivery_type', 'my_assigned_clients', 'my_sales', 'pending_withdrawal', 'withdrawn', 'pay_efectivo', 'pay_transferencia'),
+            'paymentMethods' => PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
             'canWithdraw' => $user->can('pedidos.retirar'),
@@ -192,13 +216,13 @@ class OrderController extends Controller
 
         $portionsTotal = (int) (clone $activeBase)->sum('total_portions');
         $personalPortions = (int) (clone $activeBase)->where('rover_id', $user->id)->sum('total_portions');
-        $saucesTotal = (int) \App\Models\OrderItem::query()
+        $saucesTotal = (int) OrderItem::query()
             ->where('product', 'salsas')
             ->whereIn('order_id', (clone $activeBase)->select('id'))
             ->sum('quantity');
 
-        $giftsCount = (int) \App\Models\Gift::query()->where('year_id', $year->id)->count();
-        $lossesCount = (int) \App\Models\Loss::query()->where('year_id', $year->id)->count();
+        $giftsCount = (int) Gift::query()->where('year_id', $year->id)->count();
+        $lossesCount = (int) Loss::query()->where('year_id', $year->id)->count();
 
         // Fase 8 (correccion): contadores de retiro para los indicadores
         // clickeables "Por retirar" y "Retiradas". Misma base que el resto:
@@ -222,14 +246,14 @@ class OrderController extends Controller
             // pedidos NO cancelados de esta edicion. Incluye pagos parciales/
             // anticipos porque se basa en los PAGOS reales, no en el total
             // teorico del pedido.
-            $collectedByMethod = \App\Models\Payment::query()
+            $collectedByMethod = Payment::query()
                 ->select('payment_method_id', DB::raw('sum(amount) as total'))
                 ->whereIn('order_id', (clone $activeBase)->select('id'))
                 ->groupBy('payment_method_id')
                 ->get()
                 ->keyBy('payment_method_id');
 
-            $methods = \App\Models\PaymentMethod::query()->get(['id', 'name', 'slug']);
+            $methods = PaymentMethod::query()->get(['id', 'name', 'slug']);
 
             $bySlug = $methods->mapWithKeys(fn ($m) => [
                 $m->slug => (float) ($collectedByMethod[$m->id]->total ?? 0),
@@ -305,12 +329,12 @@ class OrderController extends Controller
             // sin poder elegirla (ver store(), que la fuerza igual del lado
             // servidor). Solo quien administra ediciones puede elegir otra.
             'canChooseYear' => $user->can('anios.gestionar'),
-            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'paymentMethods' => PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canRegisterPayment' => $user->can('pagos.registrar'),
             // Fase 6A: permite pre-cargar cliente/edicion cuando se llega desde
             // "Crear pedido" en la pantalla de Asignaciones (?client_id=&year_id=).
             'preselectedClient' => $request->filled('client_id')
-                ? \App\Models\Client::find($request->integer('client_id'), ['id', 'first_name', 'last_name', 'phone', 'address'])
+                ? Client::find($request->integer('client_id'), ['id', 'first_name', 'last_name', 'phone', 'address'])
                 : null,
             'preselectedYearId' => $request->integer('year_id') ?: null,
         ]);
@@ -324,7 +348,7 @@ class OrderController extends Controller
      * 'advanced_items' (opcional) son las excepciones manuales de "Opciones
      * avanzadas" (regalo/personalizado), se agregan aparte de la linea principal.
      */
-    public function store(StoreOrderRequest $request, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    public function store(StoreOrderRequest $request, PricingService $pricing, ClientAssignmentService $assignments): RedirectResponse
     {
         $data = $request->validated();
 
@@ -433,7 +457,7 @@ class OrderController extends Controller
             'rovers' => $user->can('pedidos.asignar-rover')
                 ? User::permission('pedidos.editar')->active()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'paymentMethods' => \App\Models\PaymentMethod::where('is_active', true)->get(['id', 'name']),
+            'paymentMethods' => PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
             'canWithdraw' => $user->can('pedidos.retirar'),
@@ -455,7 +479,7 @@ class OrderController extends Controller
      * OrderController::index (un Rover sin 'pedidos.ver-todos' solo ve sus
      * propios pedidos existentes, para no filtrar informacion de otros).
      */
-    public function checkExisting(Request $request): \Illuminate\Http\JsonResponse
+    public function checkExisting(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Order::class);
 
@@ -490,7 +514,7 @@ class OrderController extends Controller
      * generica. Ahora se re-chequea explicitamente el permiso de asignacion
      * cuando el payload incluye rover_id.
      */
-    public function update(UpdateOrderRequest $request, Order $order, PricingService $pricing, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    public function update(UpdateOrderRequest $request, Order $order, PricingService $pricing, ClientAssignmentService $assignments): RedirectResponse
     {
         $data = $request->validated();
 
@@ -559,7 +583,7 @@ class OrderController extends Controller
      * navegacion Inertia, para poder mostrar un mensaje de error claro si
      * falla (antes fallaba en silencio, ver Orders/Edit.vue).
      */
-    public function destroy(Request $request, Order $order): RedirectResponse|\Illuminate\Http\JsonResponse
+    public function destroy(Request $request, Order $order): RedirectResponse|JsonResponse
     {
         Gate::authorize('delete', $order);
 
@@ -578,7 +602,7 @@ class OrderController extends Controller
      * lineas a mano desde OrderItemController para el caso mas frecuente.
      * Responde JSON (se usa desde Orders/Edit.vue sin recargar la pagina).
      */
-    public function updatePortions(UpdatePortionsRequest $request, Order $order, PricingService $pricing): \Illuminate\Http\JsonResponse
+    public function updatePortions(UpdatePortionsRequest $request, Order $order, PricingService $pricing): JsonResponse
     {
         $pricing->syncPortionsForOrder($order, $request->validated('portions'), $order->year, $request->user()->id);
 

@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\BulkDeleteClientsRequest;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
+use App\Http\Requests\UpdateHistoricalNumberRequest;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Models\Year;
+use App\Services\ClientAssignmentService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -30,14 +33,20 @@ class ClientController extends Controller
      *   o numero historico (ver Client::scopeSearchTerm, seccion 4).
      * - sort / direction: ordenamiento de columnas.
      *
-     * Para las 50 filas de la pagina actual, se asegura (firstOrCreate) que
-     * cada cliente tenga una fila de asignacion para la edicion seleccionada:
-     * asi la fusion visual con Asignaciones puede mostrar y accionar sobre
-     * "responsable"/"estado de seguimiento" para CUALQUIER cliente listado,
-     * incluso uno que todavia nunca fue contactado (contact_status por
-     * defecto 'pendiente', mismo comportamiento que ya tenia Asignaciones).
-     * El costo de esta escritura queda acotado a como mucho 50 filas por
-     * carga de esta pantalla (nunca a toda la tabla de clientes).
+     * Se asegura (bulk insert) que cada cliente listado tenga una fila de
+     * asignacion para la edicion seleccionada: asi la fusion visual con
+     * Asignaciones puede mostrar y accionar sobre "responsable"/"estado de
+     * seguimiento" para CUALQUIER cliente listado, incluso uno que todavia
+     * nunca fue contactado (contact_status por defecto 'pendiente', mismo
+     * comportamiento que ya tenia Asignaciones).
+     *
+     * Fase P2 (UX): sin paginacion, esta pantalla puede listar TODOS los
+     * clientes de la edicion en una sola carga, asi que la creacion de
+     * asignaciones faltantes ya no puede ser "como mucho 50 filas" (ver
+     * comentario historico eliminado). Se hace con un UNICO insertOrIgnore
+     * masivo (no N firstOrCreate en loop) para que siga siendo una sola
+     * consulta de escritura sin importar cuantos clientes falten, en vez de
+     * degradar a un N+1 al sacar el limite de 50.
      */
     public function index(Request $request): Response
     {
@@ -56,6 +65,13 @@ class ClientController extends Controller
 
         $clients = Client::query()
             ->when($request->filled('search'), fn ($query) => $query->searchTerm($request->get('search')))
+            // Fase P2 (UX): filtro EXACTO por cliente, usado cuando se elige
+            // una sugerencia del autocomplete (ver Clients/Index.vue,
+            // pickSuggestion). A proposito NO reutiliza 'search': ese es un
+            // LIKE tolerante (Client::scopeSearchTerm) que tambien matchea
+            // contra telefono, asi que un N° historico corto podia traer de
+            // rebote clientes cuyo telefono contuviera esa secuencia.
+            ->when($request->filled('client_id'), fn ($query) => $query->where('id', $request->get('client_id')))
             // Fase 8 (correccion): "Mis clientes asignados" — clientes que
             // tienen assigned_user_id = auth user en client_year_assignments
             // para la edicion seleccionada.
@@ -71,32 +87,43 @@ class ClientController extends Controller
             // cuando se ordena por last_name (el caso por defecto), para que
             // personas con el mismo apellido queden en orden predecible.
             ->when($sort === 'last_name', fn ($q) => $q->orderBy('first_name', $direction))
-            ->paginate(50)
-            ->withQueryString();
+            // Fase P2 (UX): se elimina la paginacion a pedido explicito del
+            // usuario (una sola lista larga, igual que la pagina anterior).
+            // Los filtros/busqueda ya se aplicaron arriba, asi que $clients
+            // solo trae las filas que matchean, no toda la tabla.
+            ->get();
 
-        // Garantiza que cada cliente de ESTA pagina tenga asignacion para
-        // $year (ver docblock de arriba), y despues las trae todas de una
-        // sola consulta para evitar N+1.
+        // Garantiza que cada cliente listado tenga asignacion para $year (ver
+        // docblock de arriba). insertOrIgnore en un solo INSERT (no un loop
+        // de N firstOrCreate): sigue siendo una unica consulta de escritura
+        // sin importar cuantos clientes falten, y si dos requests concurrentes
+        // llegaran a pisarse la unique(client_id,year_id) de la tabla lo
+        // ignora en vez de tirar un error de integridad.
         $existingClientIds = ClientAssignment::query()
             ->where('year_id', $year->id)
-            ->whereIn('client_id', collect($clients->items())->pluck('id'))
+            ->whereIn('client_id', $clients->pluck('id'))
             ->pluck('client_id');
 
-        collect($clients->items())
-            ->whereNotIn('id', $existingClientIds)
-            ->each(fn (Client $client) => ClientAssignment::firstOrCreate([
-                'client_id' => $client->id,
+        $missingClientIds = $clients->pluck('id')->diff($existingClientIds);
+        if ($missingClientIds->isNotEmpty()) {
+            $now = now();
+            ClientAssignment::insertOrIgnore($missingClientIds->map(fn ($clientId) => [
+                'client_id' => $clientId,
                 'year_id' => $year->id,
-            ]));
+                'contact_status' => ClientAssignment::STATUS_PENDIENTE,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all());
+        }
 
         $assignments = ClientAssignment::query()
             ->where('year_id', $year->id)
-            ->whereIn('client_id', collect($clients->items())->pluck('id'))
+            ->whereIn('client_id', $clients->pluck('id'))
             ->with(['assignedUser:id,name', 'lastContactedBy:id,name'])
             ->get()
             ->keyBy('client_id');
 
-        $clients->getCollection()->transform(function (Client $client) use ($assignments) {
+        $clients->transform(function (Client $client) use ($assignments) {
             $client->setRelation('yearAssignment', $assignments->get($client->id));
 
             return $client;
@@ -108,7 +135,7 @@ class ClientController extends Controller
             'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active']),
             'statuses' => ClientAssignment::STATUSES,
             'users' => User::query()->active()->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only('search', 'sort', 'direction', 'my_assigned_clients'),
+            'filters' => $request->only('search', 'client_id', 'sort', 'direction', 'my_assigned_clients'),
             // Permisos administrativos de asignacion (seccion 2): solo
             // Logistica/Jefe de Logistica/Admin (ver RolesAndPermissionsSeeder).
             'canTransfer' => $user->can('asignaciones.transferir'),
@@ -125,7 +152,7 @@ class ClientController extends Controller
      * 15 resultados: es para tipear y elegir, no un listado completo (para eso
      * ya esta /clients).
      */
-    public function search(Request $request): \Illuminate\Http\JsonResponse
+    public function search(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', Client::class);
 
@@ -144,7 +171,7 @@ class ClientController extends Controller
         return response()->json($clients);
     }
 
-    public function store(StoreClientRequest $request): RedirectResponse|\Illuminate\Http\JsonResponse
+    public function store(StoreClientRequest $request): RedirectResponse|JsonResponse
     {
         // Fase 7, seccion 3: el numero historico se asigna automaticamente,
         // de forma atomica y sin condiciones de carrera (ver
@@ -162,7 +189,7 @@ class ClientController extends Controller
         return back()->with('success', "Cliente {$client->full_name} creado.");
     }
 
-    public function update(UpdateClientRequest $request, Client $client): RedirectResponse|\Illuminate\Http\JsonResponse
+    public function update(UpdateClientRequest $request, Client $client): RedirectResponse|JsonResponse
     {
         $client->update([
             ...$request->validated(),
@@ -183,7 +210,7 @@ class ClientController extends Controller
      * (Logistica/Jefe de Logistica/Admin), sin abrir esa columna a cualquiera
      * que tenga el permiso generico 'clientes.editar'.
      */
-    public function updateHistoricalNumber(\App\Http\Requests\UpdateHistoricalNumberRequest $request, Client $client): RedirectResponse|\Illuminate\Http\JsonResponse
+    public function updateHistoricalNumber(UpdateHistoricalNumberRequest $request, Client $client): RedirectResponse|JsonResponse
     {
         $client->update([
             'historical_number' => $request->validated('historical_number'),
@@ -205,10 +232,10 @@ class ClientController extends Controller
      * el MISMO servicio (ClientAssignmentService); no duplican logica de
      * negocio, solo resuelven/crean la asignacion antes de delegar.
      */
-    public function selfAssignForYear(Request $request, Client $client, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    public function selfAssignForYear(Request $request, Client $client, ClientAssignmentService $assignments): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
-        $assignment = \App\Models\ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
+        $assignment = ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
 
         Gate::authorize('selfAssign', $assignment);
 
@@ -220,12 +247,12 @@ class ClientController extends Controller
         return back()->with('success', 'Cliente autoasignado.');
     }
 
-    public function transferForYear(Request $request, Client $client, \App\Services\ClientAssignmentService $assignments): RedirectResponse
+    public function transferForYear(Request $request, Client $client, ClientAssignmentService $assignments): RedirectResponse
     {
         $year = Year::findOrFail($request->integer('year_id'));
         $request->validate(['assigned_user_id' => ['required', 'integer', 'exists:users,id']]);
 
-        $assignment = \App\Models\ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
+        $assignment = ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
 
         Gate::authorize('transfer', $assignment);
 
@@ -245,7 +272,7 @@ class ClientController extends Controller
             'mark_contacted_now' => ['sometimes', 'boolean'],
         ]);
 
-        $assignment = \App\Models\ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
+        $assignment = ClientAssignment::firstOrCreate(['client_id' => $client->id, 'year_id' => $year->id]);
 
         Gate::authorize('updateContact', $assignment);
 
@@ -273,7 +300,7 @@ class ClientController extends Controller
     {
         $year = Year::findOrFail($request->integer('year_id'));
 
-        $assignment = \App\Models\ClientAssignment::where('client_id', $client->id)
+        $assignment = ClientAssignment::where('client_id', $client->id)
             ->where('year_id', $year->id)
             ->first();
 
@@ -281,7 +308,7 @@ class ClientController extends Controller
         // Jefe de Logistica/Admin, ver ClientAssignmentPolicy::transfer).
         // Si la asignacion no existe todavia, se autoriza igual sobre una
         // instancia nueva (misma regla: requiere 'asignaciones.transferir').
-        Gate::authorize('transfer', $assignment ?? new \App\Models\ClientAssignment(['client_id' => $client->id, 'year_id' => $year->id]));
+        Gate::authorize('transfer', $assignment ?? new ClientAssignment(['client_id' => $client->id, 'year_id' => $year->id]));
 
         $assignment?->delete();
 

@@ -24,7 +24,7 @@ import ToastContainer from '@/Components/ToastContainer.vue'
 import { useToast } from '@/Composables/useToast'
 
 const props = defineProps({
-  clients: { type: Object, required: true },
+  clients: { type: Array, required: true },
   year: { type: Object, required: true },
   years: { type: Array, default: () => [] },
   statuses: { type: Object, default: () => ({}) },
@@ -43,7 +43,7 @@ const toast = useToast()
 
 // Fase 18: estado vacio contextual (distingue "sin resultados de busqueda/filtro"
 // de "todavia no hay clientes cargados").
-const isFiltering = computed(() => Boolean(props.filters.search || props.filters.my_assigned_clients))
+const isFiltering = computed(() => Boolean(props.filters.search || props.filters.client_id || props.filters.my_assigned_clients))
 
 const search = ref(props.filters.search ?? '')
 const suggestions = ref([])
@@ -70,7 +70,10 @@ function reloadWith(extra) {
 }
 
 function applySearch() {
-  reloadWith({ search: search.value || undefined })
+  // Una busqueda de texto (tipeada + Enter/Buscar) siempre reemplaza una
+  // seleccion exacta anterior (ver pickSuggestion): son dos modos
+  // mutuamente excluyentes, nunca se combinan.
+  reloadWith({ search: search.value || undefined, client_id: undefined })
 }
 
 // Fase 7 (correccion 2): al vaciar el buscador, la lista se restaura sola.
@@ -87,7 +90,20 @@ watch(search, (value) => {
 // nombre+apellido en cualquier orden, parciales, telefono y N° historico
 // (ver Client::scopeSearchTerm). Con debounce para no disparar un request
 // por cada tecla.
+//
+// BUG (Fase P2, UX): pickSuggestion() escribe en `search.value`, y ese mismo
+// cambio volvia a disparar ESTE watcher (Vue no distingue una asignacion
+// programatica de una tipeada), reabriendo el dropdown de sugerencias
+// ~250ms despues del click y tapando visualmente la tabla ya filtrada por
+// debajo. Mismo fix que Orders/Index.vue: un flag salta el fetch una sola
+// vez cuando el cambio vino de pickSuggestion.
+let skipNextSuggestFetch = false
 watch(search, (value) => {
+  if (skipNextSuggestFetch) {
+    skipNextSuggestFetch = false
+    return
+  }
+
   clearTimeout(suggestDebounce)
   const term = value.trim()
   if (term.length < 2) {
@@ -110,11 +126,20 @@ watch(search, (value) => {
 function pickSuggestion(client) {
   showSuggestions.value = false
   suggestions.value = []
-  // El N° historico es unico: usarlo como termino de busqueda garantiza
-  // filtrar la tabla a exactamente ese cliente, sin ambiguedad de nombres
-  // repetidos.
-  search.value = String(client.historical_number ?? `${client.first_name} ${client.last_name}`)
-  applySearch()
+  skipNextSuggestFetch = true
+  // BUG (Fase P2, UX): esto antes armaba un termino de TEXTO (nombre o N°
+  // historico) y llamaba a applySearch(), que termina en una busqueda LIKE
+  // por Client::scopeSearchTerm — esa misma busqueda tambien matchea contra
+  // el campo "telefono", asi que un N° historico corto podia traer de rebote
+  // clientes cuyo TELEFONO contuviera esa secuencia. Filtrar por click en
+  // una sugerencia debe ser exacto: se manda el client_id (ver
+  // ClientController::index) en vez de reciclar el buscador de texto. El
+  // texto del input queda solo como feedback visual, nunca se envia como
+  // `search`.
+  search.value = client.historical_number
+    ? `#${client.historical_number} — ${client.first_name} ${client.last_name}`
+    : `${client.first_name} ${client.last_name}`
+  reloadWith({ client_id: client.id, search: undefined })
 }
 
 function sortBy(column) {
@@ -129,11 +154,11 @@ function toggleSelected(id) {
 }
 
 const allSelected = computed(() =>
-  props.clients.data.length > 0 && props.clients.data.every((c) => selected.value.has(c.id))
+  props.clients.length > 0 && props.clients.every((c) => selected.value.has(c.id))
 )
 
 function toggleSelectAll() {
-  selected.value = allSelected.value ? new Set() : new Set(props.clients.data.map((c) => c.id))
+  selected.value = allSelected.value ? new Set() : new Set(props.clients.map((c) => c.id))
 }
 
 async function bulkDelete() {
@@ -228,7 +253,7 @@ function updateContact(client, patch) {
 }
 
 function selectedAssignmentIds() {
-  return props.clients.data
+  return props.clients
     .filter((c) => selected.value.has(c.id))
     .map((c) => c.year_assignment?.id)
     .filter(Boolean)
@@ -436,7 +461,7 @@ function exportUrl() {
           </thead>
           <tbody>
             <tr
-              v-for="client in clients.data"
+              v-for="client in clients"
               :key="client.id"
               class="border-t border-gray-800 hover:bg-gray-800/60"
             >
@@ -520,7 +545,7 @@ function exportUrl() {
                 </div>
               </td>
             </tr>
-            <tr v-if="!clients.data.length">
+            <tr v-if="!clients.length">
               <td :colspan="canBulk ? 10 : 9" class="p-8 text-center text-gray-500">
                 <template v-if="isFiltering">
                   <p class="text-2xl mb-1">🔎</p>
@@ -539,20 +564,6 @@ function exportUrl() {
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div class="flex flex-wrap gap-2">
-        <Link
-          v-for="link in clients.links"
-          :key="link.label"
-          :href="link.url ?? '#'"
-          v-html="link.label"
-          class="px-3 py-1 rounded-md text-sm"
-          :class="[
-            link.active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700',
-            !link.url ? 'opacity-40 pointer-events-none' : 'hover:bg-gray-300',
-          ]"
-        />
       </div>
     </div>
 

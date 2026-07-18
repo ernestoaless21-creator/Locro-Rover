@@ -5,15 +5,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ClientObservationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GiftController;
-use App\Http\Controllers\LossController;
-use App\Http\Controllers\OrderBulkController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\OrderItemController;
-use App\Http\Controllers\PendingApprovalController;
-use App\Http\Controllers\PricingController;
-use App\Http\Controllers\MeetingController;
-use App\Http\Controllers\MeetingDecisionController;
-use App\Http\Controllers\MeetingDocumentController;
+use App\Http\Controllers\HistoricalImportController;
 use App\Http\Controllers\InfrastructureImportController;
 use App\Http\Controllers\InfrastructureInventoryController;
 use App\Http\Controllers\InfrastructureItemController;
@@ -21,6 +13,15 @@ use App\Http\Controllers\InfrastructureLoanController;
 use App\Http\Controllers\LogisticsCategoryController;
 use App\Http\Controllers\LogisticsImportController;
 use App\Http\Controllers\LogisticsRecordController;
+use App\Http\Controllers\LossController;
+use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MeetingDecisionController;
+use App\Http\Controllers\MeetingDocumentController;
+use App\Http\Controllers\OrderBulkController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OrderItemController;
+use App\Http\Controllers\PendingApprovalController;
+use App\Http\Controllers\PricingController;
 use App\Http\Controllers\PublicityCategoryController;
 use App\Http\Controllers\PublicityImportController;
 use App\Http\Controllers\PublicityMaterialController;
@@ -287,6 +288,16 @@ Route::middleware([
 
     Route::post('/years/{year}/activate', [YearController::class, 'activate'])
         ->name('years.activate');
+
+    // Fase P2: importacion historica de clientes/pedidos desde Excel.
+    Route::get('/imports', [HistoricalImportController::class, 'create'])
+        ->name('imports.create');
+    Route::post('/imports/analyze', [HistoricalImportController::class, 'analyze'])
+        ->name('imports.analyze');
+    Route::post('/imports/confirm', [HistoricalImportController::class, 'confirm'])
+        ->name('imports.confirm');
+    Route::delete('/imports/{token}', [HistoricalImportController::class, 'cancel'])
+        ->name('imports.cancel');
 
     // Fase 13: cronograma operativo previsto vs. real.
     Route::get('/schedule', [ScheduleDayController::class, 'index'])->name('schedule.index');

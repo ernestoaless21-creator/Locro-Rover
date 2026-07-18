@@ -5,12 +5,13 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\User;
 use App\Models\Year;
 use App\Services\PricingService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -277,8 +278,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $order->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $order->id)
         );
     }
 
@@ -314,7 +315,7 @@ class OrderPhase8Test extends TestCase
         $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&my_assigned_clients=1");
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('orders.total', 1));
+        $response->assertInertia(fn ($page) => $page->has('orders', 1));
     }
 
     public function test_my_assigned_clients_respects_year_id(): void
@@ -344,7 +345,7 @@ class OrderPhase8Test extends TestCase
         $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&my_assigned_clients=1");
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('orders.total', 0));
+        $response->assertInertia(fn ($page) => $page->has('orders', 0));
     }
 
     public function test_my_assigned_clients_combines_with_existing_filter_payment_status(): void
@@ -377,8 +378,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderPendiente->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $orderPendiente->id)
         );
     }
 
@@ -415,16 +416,20 @@ class OrderPhase8Test extends TestCase
         $this->actingAs($admin)
             ->get("/orders?year_id={$this->year->id}&delivery_type=delivery")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('orders.total', 1));
+            ->assertInertia(fn ($page) => $page->has('orders', 1));
 
         // Filtro withdrawal_status (existente) sigue funcionando.
         $this->actingAs($admin)
             ->get("/orders?year_id={$this->year->id}&withdrawal_status=no_retirado")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('orders.total', 2));
+            ->assertInertia(fn ($page) => $page->has('orders', 2));
     }
 
-    public function test_pagination_preserves_new_filter_params(): void
+    // Fase P2: el nombre historico ("pagination") quedo desactualizado al
+    // eliminarse la paginacion de /orders; el test en si nunca verifico
+    // paginas, solo que los filtros nuevos se reflejen en el prop `filters`
+    // de una unica carga (lo que sigue siendo cierto).
+    public function test_filters_are_preserved_in_filters_prop(): void
     {
         $admin = $this->makeAdmin();
 
@@ -465,19 +470,66 @@ class OrderPhase8Test extends TestCase
         $this->actingAs($limited)
             ->get("/orders?year_id={$this->year->id}")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('orders.total', 1));
+            ->assertInertia(fn ($page) => $page->has('orders', 1));
 
         // Con my_assigned_clients: sigue viendo solo los suyos (interseccion).
         $this->actingAs($limited)
             ->get("/orders?year_id={$this->year->id}&my_assigned_clients=1")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('orders.total', 1));
+            ->assertInertia(fn ($page) => $page->has('orders', 1));
 
         // No recibe roverRanking (sin pedidos.ver-todos).
         $this->actingAs($limited)
             ->get("/orders?year_id={$this->year->id}")
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('roverRanking', null));
+    }
+
+    // ---------- FILTRO: CLIENT_ID (autocomplete, seleccion exacta) ------------
+
+    /**
+     * Fase P2 (UX): elegir una sugerencia del autocomplete debe filtrar por
+     * client_id (igualdad exacta), NUNCA reciclando el buscador de texto
+     * (Client::scopeSearchTerm), que tambien matchea contra el telefono. Este
+     * test reproduce exactamente el bug reportado: un N° historico corto
+     * ("234") que aparece como substring dentro del telefono de OTRO cliente.
+     */
+    public function test_client_id_filter_matches_exact_client_ignoring_phone_substring_collisions(): void
+    {
+        $admin = $this->makeAdmin();
+
+        $clientWithMatchingPhone = Client::create(['first_name' => 'Ana', 'last_name' => 'Telefono', 'phone' => '1123456789']);
+        $orderWithMatchingPhone = Order::create([
+            'client_id' => $clientWithMatchingPhone->id,
+            'year_id' => $this->year->id,
+            'rover_id' => $admin->id,
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+            'take_away' => true,
+        ]);
+        app(PricingService::class)->syncPortionsForOrder($orderWithMatchingPhone, 2, $this->year, $admin->id);
+
+        // El telefono de arriba ("1123456789") contiene "234" como substring
+        // ("...2345..."). Con una busqueda de TEXTO por "234" (el bug viejo),
+        // este cliente se colaria de rebote.
+        $selectedClient = Client::create(['first_name' => 'Beto', 'last_name' => 'Numerico', 'historical_number' => 234]);
+        $selectedOrder = Order::create([
+            'client_id' => $selectedClient->id,
+            'year_id' => $this->year->id,
+            'rover_id' => $admin->id,
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+            'take_away' => true,
+        ]);
+        app(PricingService::class)->syncPortionsForOrder($selectedOrder, 3, $this->year, $admin->id);
+
+        $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&client_id={$selectedClient->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('orders', 1)
+            ->where('orders.0.id', $selectedOrder->id)
+        );
     }
 
     // ---------- FILTRO: MIS VENTAS (rover_id) ---------------------------------
@@ -494,8 +546,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $myOrder->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $myOrder->id)
         );
     }
 
@@ -514,8 +566,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderAdminBoth->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $orderAdminBoth->id)
         );
     }
 
@@ -537,7 +589,7 @@ class OrderPhase8Test extends TestCase
         $response = $this->actingAs($admin)->get("/orders?year_id={$this->year->id}&pending_withdrawal=1");
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('orders.total', 2));
+        $response->assertInertia(fn ($page) => $page->has('orders', 2));
     }
 
     public function test_withdrawn_filter_shows_only_fully_withdrawn_orders(): void
@@ -556,8 +608,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderRetirado->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $orderRetirado->id)
         );
     }
 
@@ -567,11 +619,11 @@ class OrderPhase8Test extends TestCase
     {
         $admin = $this->makeAdmin();
 
-        $methodEfectivo = \App\Models\PaymentMethod::where('slug', 'efectivo')->firstOrFail();
-        $methodTransferencia = \App\Models\PaymentMethod::where('slug', 'transferencia')->firstOrFail();
+        $methodEfectivo = PaymentMethod::where('slug', 'efectivo')->firstOrFail();
+        $methodTransferencia = PaymentMethod::where('slug', 'transferencia')->firstOrFail();
 
         $orderEfectivo = $this->makeOrder($admin->id, $admin->id, 2);
-        \App\Models\Payment::create([
+        Payment::create([
             'order_id' => $orderEfectivo->id,
             'payment_method_id' => $methodEfectivo->id,
             'amount' => 500,
@@ -580,7 +632,7 @@ class OrderPhase8Test extends TestCase
         ]);
 
         $orderTransferencia = $this->makeOrder($admin->id, $admin->id, 3);
-        \App\Models\Payment::create([
+        Payment::create([
             'order_id' => $orderTransferencia->id,
             'payment_method_id' => $methodTransferencia->id,
             'amount' => 750,
@@ -594,8 +646,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderEfectivo->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $orderEfectivo->id)
         );
     }
 
@@ -603,19 +655,19 @@ class OrderPhase8Test extends TestCase
     {
         $admin = $this->makeAdmin();
 
-        $methodEfectivo = \App\Models\PaymentMethod::where('slug', 'efectivo')->firstOrFail();
-        $methodTransferencia = \App\Models\PaymentMethod::where('slug', 'transferencia')->firstOrFail();
+        $methodEfectivo = PaymentMethod::where('slug', 'efectivo')->firstOrFail();
+        $methodTransferencia = PaymentMethod::where('slug', 'transferencia')->firstOrFail();
 
         // Pedido con ambos medios de pago.
         $orderAmbos = $this->makeOrder($admin->id, $admin->id, 4);
-        \App\Models\Payment::create([
+        Payment::create([
             'order_id' => $orderAmbos->id,
             'payment_method_id' => $methodEfectivo->id,
             'amount' => 300,
             'paid_at' => now(),
             'registered_by' => $admin->id,
         ]);
-        \App\Models\Payment::create([
+        Payment::create([
             'order_id' => $orderAmbos->id,
             'payment_method_id' => $methodTransferencia->id,
             'amount' => 200,
@@ -625,7 +677,7 @@ class OrderPhase8Test extends TestCase
 
         // Pedido solo con efectivo.
         $orderSoloEfectivo = $this->makeOrder($admin->id, $admin->id, 2);
-        \App\Models\Payment::create([
+        Payment::create([
             'order_id' => $orderSoloEfectivo->id,
             'payment_method_id' => $methodEfectivo->id,
             'amount' => 400,
@@ -640,8 +692,8 @@ class OrderPhase8Test extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.total', 1)
-            ->where('orders.data.0.id', $orderAmbos->id)
+            ->has('orders', 1)
+            ->where('orders.0.id', $orderAmbos->id)
         );
     }
 

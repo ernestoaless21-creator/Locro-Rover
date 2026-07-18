@@ -62,10 +62,8 @@ class OrderObservationsVisibilityTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.data.0.observations', 'Retira la hermana')
-            ->where('orders.data.0.client_assignment_notes', 'No atiende el telefono, insistir')
+            ->where('orders.0.observations', 'Retira la hermana')
+            ->where('orders.0.client_assignment_notes', 'No atiende el telefono, insistir')
         );
     }
 }
-
-

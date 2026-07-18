@@ -51,11 +51,11 @@ class ClientPhase8CorrectionTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('clients.data.0.last_name', 'Alvarez')
-            ->where('clients.data.1.last_name', 'Lopez')
-            ->where('clients.data.1.first_name', 'Ana')    // Ana antes que Zara
-            ->where('clients.data.2.last_name', 'Lopez')
-            ->where('clients.data.2.first_name', 'Zara')
+            ->where('clients.0.last_name', 'Alvarez')
+            ->where('clients.1.last_name', 'Lopez')
+            ->where('clients.1.first_name', 'Ana')    // Ana antes que Zara
+            ->where('clients.2.last_name', 'Lopez')
+            ->where('clients.2.first_name', 'Zara')
         );
     }
 
@@ -71,9 +71,33 @@ class ClientPhase8CorrectionTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('clients.data.0.first_name', 'Ana')
-            ->where('clients.data.1.first_name', 'Carlos')
-            ->where('clients.data.2.first_name', 'Mario')
+            ->where('clients.0.first_name', 'Ana')
+            ->where('clients.1.first_name', 'Carlos')
+            ->where('clients.2.first_name', 'Mario')
+        );
+    }
+
+    // ---------- FILTRO: CLIENT_ID (autocomplete, seleccion exacta) ------------
+
+    /**
+     * Fase P2 (UX): mismo fix que en Pedidos (ver OrderPhase8Test). Elegir
+     * una sugerencia debe filtrar por client_id exacto, no por una busqueda
+     * de texto que tambien matchea contra telefono.
+     */
+    public function test_client_id_filter_matches_exact_client_ignoring_phone_substring_collisions(): void
+    {
+        $admin = $this->makeAdmin();
+
+        // El telefono contiene "234" como substring ("...2345...").
+        Client::create(['first_name' => 'Ana', 'last_name' => 'Telefono', 'phone' => '1123456789', 'created_by' => $admin->id]);
+        $selectedClient = Client::create(['first_name' => 'Beto', 'last_name' => 'Numerico', 'historical_number' => 234, 'created_by' => $admin->id]);
+
+        $response = $this->actingAs($admin)->get("/clients?year_id={$this->year->id}&client_id={$selectedClient->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('clients', 1)
+            ->where('clients.0.id', $selectedClient->id)
         );
     }
 
@@ -109,8 +133,8 @@ class ClientPhase8CorrectionTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('clients.total', 1)
-            ->where('clients.data.0.id', $myClient->id)
+            ->has('clients', 1)
+            ->where('clients.0.id', $myClient->id)
         );
     }
 
@@ -140,7 +164,7 @@ class ClientPhase8CorrectionTest extends TestCase
         $response = $this->actingAs($admin)->get("/clients?year_id={$this->year->id}&my_assigned_clients=1");
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('clients.total', 0));
+        $response->assertInertia(fn ($page) => $page->has('clients', 0));
     }
 
     public function test_my_assigned_clients_filter_is_included_in_filters_prop(): void
@@ -164,6 +188,6 @@ class ClientPhase8CorrectionTest extends TestCase
         $response = $this->actingAs($admin)->get("/clients?year_id={$this->year->id}");
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('clients.total', 2));
+        $response->assertInertia(fn ($page) => $page->has('clients', 2));
     }
 }
