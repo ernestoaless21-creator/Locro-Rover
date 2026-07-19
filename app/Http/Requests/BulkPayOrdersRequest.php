@@ -2,14 +2,17 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\RequiresBulkOrdersPermission;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 class BulkPayOrdersRequest extends FormRequest
 {
+    use RequiresBulkOrdersPermission;
+
     public function authorize(): bool
     {
-        return $this->user()->can('pagos.registrar');
+        return $this->user()->can('pagos.registrar') && $this->passesBulkOrdersGate();
     }
 
     /**

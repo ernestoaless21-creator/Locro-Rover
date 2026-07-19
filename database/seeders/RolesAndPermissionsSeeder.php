@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Year;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -55,6 +56,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'pedidos.retirar',
             'pedidos.precio-excepcional',
             'pagos.registrar',
+            // Fase 20 (bug de permisos): acciones MASIVAS sobre pedidos (cobrar,
+            // retirar o asignar rover a varios pedidos seleccionados a la vez).
+            // Distinto de 'pedidos.retirar'/'pagos.registrar', que siguen
+            // aplicando a la accion INDIVIDUAL (un solo pedido por vez, ver
+            // OrderBulkController: se exige este permiso solo cuando order_ids
+            // tiene mas de un elemento). Exclusivo de Logistica: con cientos o
+            // miles de pedidos por edicion, un clic accidental en "seleccionar
+            // todos" + una accion masiva podria afectar toda la edicion.
+            'pedidos.acciones-masivas',
             // Regalos y perdidas: registros de stock independientes de pedidos.
             'regalos.gestionar',
             'perdidas.gestionar',
@@ -150,6 +160,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // cualquier Rover (ver informe de esta correccion para el detalle).
         $logisticsOnly = [
             'pedidos.asignar-rover', 'pedidos.precio-excepcional', 'pedidos.eliminar',
+            'pedidos.acciones-masivas',
             'regalos.gestionar', 'perdidas.gestionar',
             'asignaciones.transferir', 'asignaciones.numero-historico',
             'asignaciones.generar', 'asignaciones.masivo',
@@ -246,11 +257,27 @@ class RolesAndPermissionsSeeder extends Seeder
             ['label' => "Locro {$currentYear}", 'is_active' => true, 'event_type' => 'locro']
         );
 
-        $adminUser = User::firstOrCreate(['email' => env('ADMIN_EMAIL')],
-            ['name' => env('ADMIN_NAME', 'Administrador'),
-                'password' => Hash::make(env('ADMIN_PASSWORD')),
-                'is_active' => true, ]);
+        // Fase 20 (correccion): este seeder debe poder correrse en CUALQUIER
+        // entorno (incluido uno local recien clonado sin ADMIN_EMAIL en el
+        // .env) sin romper. Antes esto se ejecutaba incondicionalmente: con
+        // ADMIN_EMAIL vacio, firstOrCreate intentaba un INSERT con email=NULL
+        // y violaba la constraint NOT NULL de users.email. Los permisos/roles
+        // de arriba se siguen creando/sincronizando siempre, sin depender de
+        // esto. La idempotencia (no duplicar) sigue siendo por EMAIL, via
+        // firstOrCreate (semantica original): si ADMIN_EMAIL cambia en el
+        // .env (ej. el admin original ya no esta), este bloque crea ese
+        // nuevo usuario y le asigna el rol admin sin importar si ya existian
+        // otros admins.
+        $adminEmail = env('ADMIN_EMAIL');
 
-        $adminUser->assignRole('admin');
+        if ($adminEmail) {
+            $adminUser = User::firstOrCreate(['email' => $adminEmail], [
+                'name' => env('ADMIN_NAME', 'Administrador'),
+                'password' => Hash::make(env('ADMIN_PASSWORD') ?? Str::random(32)),
+                'is_active' => true,
+            ]);
+
+            $adminUser->assignRole('admin');
+        }
     }
 }

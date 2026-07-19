@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\RequiresBulkOrdersPermission;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -13,9 +14,13 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class BulkPayAndWithdrawOrdersRequest extends FormRequest
 {
+    use RequiresBulkOrdersPermission;
+
     public function authorize(): bool
     {
-        return $this->user()->can('pagos.registrar') && $this->user()->can('pedidos.retirar');
+        return $this->user()->can('pagos.registrar')
+            && $this->user()->can('pedidos.retirar')
+            && $this->passesBulkOrdersGate();
     }
 
     public function rules(): array

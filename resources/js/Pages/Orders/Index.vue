@@ -37,6 +37,11 @@ const props = defineProps({
   canAssignRover: { type: Boolean, default: false },
   canRegisterPayment: { type: Boolean, default: false },
   canWithdraw: { type: Boolean, default: false },
+  // Fase 20 (bug de permisos): gatea la seleccion masiva (checkboxes de fila +
+  // barra de acciones masivas), exclusivo de Logistica. Independiente de
+  // canRegisterPayment/canWithdraw, que siguen habilitando el checkbox
+  // individual "Retirado" de cada fila para el resto de los roles.
+  canBulkActions: { type: Boolean, default: false },
   counters: { type: Object, default: () => ({ portions_total: 0, sauces_total: 0, my_portions: 0, portions_pending_withdrawal: 0, portions_withdrawn: 0 }) },
   canManageGifts: { type: Boolean, default: false },
   canManageLosses: { type: Boolean, default: false },
@@ -219,16 +224,6 @@ function toggleSelected(id) {
   if (selected.value.has(id)) selected.value.delete(id)
   else selected.value.add(id)
   selected.value = new Set(selected.value)
-}
-
-const allSelected = computed(() =>
-  props.orders.length > 0 && props.orders.every((o) => selected.value.has(o.id))
-)
-
-function toggleSelectAll() {
-  selected.value = allSelected.value
-    ? new Set()
-    : new Set(props.orders.map((o) => o.id))
 }
 
 const selectedOrders = computed(() =>
@@ -639,8 +634,10 @@ function sauces(order) {
         </div>
       </div>
 
-      <!-- Acciones masivas -->
-      <div v-if="selected.size > 0" class="flex flex-wrap items-center gap-2 mb-3 bg-gray-800 text-white rounded-md px-3 py-2 text-sm">
+      <!-- Acciones masivas: exclusivo de Logistica (permiso
+           'pedidos.acciones-masivas'), ver Fase 20. El resto de los roles no
+           ve ni las checkboxes de seleccion ni esta barra. -->
+      <div v-if="canBulkActions && selected.size > 0" class="flex flex-wrap items-center gap-2 mb-3 bg-gray-800 text-white rounded-md px-3 py-2 text-sm">
         <span>{{ selected.size }} seleccionado(s)</span>
 
         <!-- Fase 7, seccion 10: accion principal destacada. -->
@@ -668,9 +665,11 @@ function sauces(order) {
         <table class="w-full text-sm bg-gray-900 text-white">
           <thead class="bg-gray-800">
             <tr>
-              <th class="p-2 w-8">
-                <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
-              </th>
+              <!-- Fase 20: se elimino permanentemente el checkbox de
+                   "seleccionar todos" del encabezado (riesgo de afectar toda
+                   la edicion con un clic accidental); solo queda la seleccion
+                   manual fila por fila, exclusiva de Logistica. -->
+              <th v-if="canBulkActions" class="p-2 w-8"></th>
               <th class="p-2 text-left">Apellido</th>
               <th class="p-2 text-left">Nombre</th>
               <th class="p-2 text-left">Rover</th>
@@ -691,7 +690,7 @@ function sauces(order) {
               :key="order.id"
               class="border-t border-gray-800 hover:bg-gray-800/60"
             >
-              <td class="p-2">
+              <td v-if="canBulkActions" class="p-2">
                 <input type="checkbox" :checked="selected.has(order.id)" @change="toggleSelected(order.id)" />
               </td>
               <td class="p-2">{{ order.client?.last_name }}</td>
@@ -793,7 +792,7 @@ function sauces(order) {
               </td>
             </tr>
             <tr v-if="!orders.length">
-              <td colspan="13">
+              <td :colspan="canBulkActions ? 13 : 12">
                 <EmptyState
                   title="No encontramos pedidos"
                   :description="emptyOrdersDescription"

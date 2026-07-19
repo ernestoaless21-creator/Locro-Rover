@@ -200,6 +200,13 @@ class OrderController extends Controller
             'canAssignRover' => $user->can('pedidos.asignar-rover'),
             'canRegisterPayment' => $user->can('pagos.registrar'),
             'canWithdraw' => $user->can('pedidos.retirar'),
+            // Fase 20 (bug de permisos): gatea la UI de seleccion masiva
+            // (checkboxes de fila + barra de acciones) de forma exclusiva e
+            // independiente de canRegisterPayment/canWithdraw, que siguen
+            // habilitando la accion INDIVIDUAL (checkbox "Retirado" de cada
+            // fila) para "todos venden". Ver OrderBulkController y
+            // RequiresBulkOrdersPermission.
+            'canBulkActions' => $user->can('pedidos.acciones-masivas'),
             // Fase 7, seccion 11: contadores compactos, calculados SIEMPRE sobre
             // TODOS los pedidos validos (no cancelados) de la edicion activa,
             // sin importar los filtros de la tabla ni el estado de pago (ver
