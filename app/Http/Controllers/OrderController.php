@@ -76,7 +76,7 @@ class OrderController extends Controller
         // "Completar" tras Client::normalizeName) SIEMPRE primero; 1)
         // apellidos que, ya normalizados, no arrancan con una letra a-z
         // (simbolos sueltos, numeros, vacio); 2) el resto, alfabetico normal.
-        $nameSortGroup = "case ".
+        $nameSortGroup = 'case '.
             "when {$lastNameSort} = 'completar' then 0 ".
             "when {$lastNameSort} = '' or substr({$lastNameSort}, 1, 1) not between 'a' and 'z' then 1 ".
             'else 2 end';

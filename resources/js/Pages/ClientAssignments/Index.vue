@@ -3,9 +3,11 @@
  * Fase 6A. Pantalla de asignaciones anuales de clientes / call center.
  * Todos los usuarios operativos activos pueden ver todo, filtrar, buscar,
  * actualizar seguimiento y autoasignarse una asignacion libre. Transferir,
- * acciones masivas, generar desde edicion anterior y numero historico
- * quedan gateados server-side (los botones ya vienen ocultos segun los
- * `can*` recibidos, pero la autorizacion real vive en el backend).
+ * acciones masivas y generar desde edicion anterior quedan gateados
+ * server-side (los botones ya vienen ocultos segun los `can*` recibidos,
+ * pero la autorizacion real vive en el backend). El numero historico es de
+ * solo lectura para todos (ya no es editable desde ningun lado de la app,
+ * ver ClientController/ClientPolicy).
  */
 import { Head, router } from '@inertiajs/vue3'
 import { ref, computed } from 'vue'
@@ -25,7 +27,6 @@ const props = defineProps({
   canTransfer: { type: Boolean, default: false },
   canBulk: { type: Boolean, default: false },
   canGenerate: { type: Boolean, default: false },
-  canManageHistoricalNumber: { type: Boolean, default: false },
   canViewFinancials: { type: Boolean, default: false },
 })
 

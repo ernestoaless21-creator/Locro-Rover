@@ -65,7 +65,6 @@ class ClientAssignmentController extends Controller
             'canTransfer' => $user->can('asignaciones.transferir'),
             'canBulk' => $user->can('asignaciones.masivo'),
             'canGenerate' => $user->can('asignaciones.generar'),
-            'canManageHistoricalNumber' => $user->can('asignaciones.numero-historico'),
             'canViewFinancials' => $user->can('finanzas.ver'),
         ]);
     }
