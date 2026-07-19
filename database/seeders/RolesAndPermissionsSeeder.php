@@ -233,14 +233,11 @@ class RolesAndPermissionsSeeder extends Seeder
             );
         }
 
-        // Fase P2: Mercado Pago, usado por el importador historico (ver
-        // LegacyExcelImportAdapter). Slug explicito con guion bajo (no
-        // str()->slug(), que daria "mercado-pago" con guion medio) para que
-        // coincida exactamente con el slug que espera el importador.
-        PaymentMethod::firstOrCreate(
-            ['slug' => 'mercado_pago'],
-            ['name' => 'Mercado Pago', 'is_active' => true]
-        );
+        // NOTA: "Mercado Pago" NO se siembra como medio de pago independiente
+        // (fue unificado con Transferencia, ver la migracion de normalizacion
+        // 2026_07_25_000001 y ImportService::persist() / los adapters de
+        // import). Si este seeder llegara a correr de nuevo sobre una base ya
+        // normalizada, no debe resucitar ese medio de pago.
 
         // Anio activo por defecto (ajustar el numero real antes de usar en produccion).
         $currentYear = (int) date('Y');

@@ -393,7 +393,10 @@ class HistoricalImportTest extends TestCase
 
         $payment = $order->payments()->firstOrFail();
         $this->assertEquals('15000.00', $payment->amount);
-        $this->assertEquals('mercado_pago', $payment->method->slug);
+        // "Mercado Pago" no existe como medio de pago independiente: se
+        // normaliza a 'transferencia' durante la importacion (ver
+        // LegacyExcelImportAdapter y la migracion de normalizacion).
+        $this->assertEquals('transferencia', $payment->method->slug);
 
         // El archivo staged se borra despues de confirmar.
         Storage::disk('local')->assertMissing('imports/staging/'.$token.'.xlsx');

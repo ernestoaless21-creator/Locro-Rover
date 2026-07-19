@@ -204,7 +204,10 @@ class ImportService
     /** @return array<string,mixed> */
     private function persist(array $rows, int $yearId, array $roverOverrides, int $userId, array $roverMatch, array $preloadedClients): array
     {
-        $paymentMethods = PaymentMethod::query()->whereIn('slug', ['efectivo', 'mercado_pago'])->pluck('id', 'slug');
+        // 'mercado_pago' no existe como medio de pago independiente (ver
+        // adapters de import, que ya normalizan cualquier hint equivalente a
+        // 'transferencia' antes de llegar aca).
+        $paymentMethods = PaymentMethod::query()->whereIn('slug', ['efectivo', 'transferencia'])->pluck('id', 'slug');
 
         $clientsCreated = 0;
         $clientsReused = 0;

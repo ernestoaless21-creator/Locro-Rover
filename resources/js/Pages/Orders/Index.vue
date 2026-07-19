@@ -671,7 +671,8 @@ function sauces(order) {
               <th class="p-2 w-8">
                 <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
               </th>
-              <th class="p-2 text-left">Cliente</th>
+              <th class="p-2 text-left">Apellido</th>
+              <th class="p-2 text-left">Nombre</th>
               <th class="p-2 text-left">Rover</th>
               <th class="p-2 text-left">Porciones</th>
               <th class="p-2 text-left">Salsas</th>
@@ -693,7 +694,8 @@ function sauces(order) {
               <td class="p-2">
                 <input type="checkbox" :checked="selected.has(order.id)" @change="toggleSelected(order.id)" />
               </td>
-              <td class="p-2">{{ order.client?.first_name }} {{ order.client?.last_name }}</td>
+              <td class="p-2">{{ order.client?.last_name }}</td>
+              <td class="p-2">{{ order.client?.first_name }}</td>
               <td class="p-2">{{ order.rover?.name ?? '-' }}</td>
               <td class="p-2">{{ order.total_portions }}</td>
               <td class="p-2">{{ sauces(order) }}</td>
@@ -791,7 +793,7 @@ function sauces(order) {
               </td>
             </tr>
             <tr v-if="!orders.length">
-              <td colspan="12">
+              <td colspan="13">
                 <EmptyState
                   title="No encontramos pedidos"
                   :description="emptyOrdersDescription"

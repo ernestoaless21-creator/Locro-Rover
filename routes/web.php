@@ -130,9 +130,6 @@ Route::middleware([
     Route::put('/clients/{client}', [ClientController::class, 'update'])
         ->name('clients.update');
 
-    Route::put('/clients/{client}/historical-number', [ClientController::class, 'updateHistoricalNumber'])
-        ->name('clients.historical-number.update');
-
     // Fase 7, secciones 1/2/6: wrappers "por cliente + edicion" de las
     // acciones de asignacion (fusion visual con Asignaciones, ver
     // ClientController). Delegan en el mismo ClientAssignmentService.

@@ -9,10 +9,12 @@
  *
  * Permisos (seccion 2): cualquier usuario con 'clientes.ver' puede ver, buscar,
  * ver historial, corregir nombre/apellido/telefono/notas y actualizar el
- * seguimiento. Transferir responsable, accion masiva, generar desde edicion
- * anterior, numero historico y "quitar de la edicion" quedan reservados a
- * Logistica/Jefe de Logistica/Admin (canTransfer/canBulk/canGenerate/
- * canManageHistoricalNumber recibidos del backend).
+ * seguimiento. Transferir responsable, accion masiva y generar desde edicion
+ * anterior quedan reservados a Logistica/Jefe de Logistica/Admin
+ * (canTransfer/canBulk/canGenerate recibidos del backend). El numero
+ * historico es un campo de SOLO LECTURA para todos: se asigna
+ * automaticamente al crear el cliente y ya no se puede editar manualmente
+ * (ver ClientController@store / Client::createWithAutoHistoricalNumber).
  */
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
@@ -35,7 +37,6 @@ const props = defineProps({
   canTransfer: { type: Boolean, default: false },
   canBulk: { type: Boolean, default: false },
   canGenerate: { type: Boolean, default: false },
-  canManageHistoricalNumber: { type: Boolean, default: false },
   canViewFinancials: { type: Boolean, default: false },
 })
 
@@ -200,16 +201,6 @@ function removeFromYear(client) {
     data: { year_id: props.year.id },
     preserveScroll: true,
     onSuccess: () => toast.success('Cliente quitado de la edicion.'),
-  })
-}
-
-function updateHistoricalNumber(client, value) {
-  const historical_number = value === '' ? null : Number(value)
-  router.put(`/clients/${client.id}/historical-number`, { historical_number }, {
-    preserveScroll: true,
-    preserveState: true,
-    onSuccess: () => toast.success('Número histórico actualizado.'),
-    onError: () => toast.error('No se pudo actualizar (¿ya está en uso?).'),
   })
 }
 
@@ -475,16 +466,7 @@ function exportUrl() {
               <td v-if="canBulk" class="p-2">
                 <input type="checkbox" :checked="selected.has(client.id)" @change="toggleSelected(client.id)" />
               </td>
-              <td class="p-2">
-                <input
-                  v-if="canManageHistoricalNumber"
-                  type="number"
-                  class="w-16 bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs"
-                  :value="client.historical_number"
-                  @change="updateHistoricalNumber(client, $event.target.value)"
-                />
-                <span v-else>{{ client.historical_number ?? '—' }}</span>
-              </td>
+              <td class="p-2">{{ client.historical_number ?? '—' }}</td>
               <td class="p-2">{{ client.last_name }}</td>
               <td class="p-2">{{ client.first_name }}</td>
               <td class="p-2">{{ client.phone }}</td>

@@ -73,15 +73,4 @@ class ClientPolicy
     {
         return $user->can('clientes.eliminar');
     }
-
-    /**
-     * Fase 6A, seccion 5: el numero historico permanente del cliente solo lo
-     * puede gestionar (crear/editar) Logistica/Jefe de Logistica/Admin. Los
-     * demas usuarios operativos pueden VERLO (viene incluido en 'clientes.ver'),
-     * pero no modificarlo.
-     */
-    public function manageHistoricalNumber(User $user): bool
-    {
-        return $user->can('asignaciones.numero-historico');
-    }
 }

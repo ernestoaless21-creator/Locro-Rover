@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\BulkDeleteClientsRequest;
 use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
-use App\Http\Requests\UpdateHistoricalNumberRequest;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
@@ -141,7 +140,6 @@ class ClientController extends Controller
             'canTransfer' => $user->can('asignaciones.transferir'),
             'canBulk' => $user->can('asignaciones.masivo'),
             'canGenerate' => $user->can('asignaciones.generar'),
-            'canManageHistoricalNumber' => $user->can('asignaciones.numero-historico'),
             'canViewFinancials' => $user->can('finanzas.ver'),
         ]);
     }
@@ -201,27 +199,6 @@ class ClientController extends Controller
         }
 
         return back()->with('success', 'Cliente actualizado.');
-    }
-
-    /**
-     * Fase 6A, seccion 5: numero historico permanente del cliente. Endpoint
-     * dedicado (en vez de sumarlo a UpdateClientRequest) para poder gatear
-     * exclusivamente con 'asignaciones.numero-historico'
-     * (Logistica/Jefe de Logistica/Admin), sin abrir esa columna a cualquiera
-     * que tenga el permiso generico 'clientes.editar'.
-     */
-    public function updateHistoricalNumber(UpdateHistoricalNumberRequest $request, Client $client): RedirectResponse|JsonResponse
-    {
-        $client->update([
-            'historical_number' => $request->validated('historical_number'),
-            'updated_by' => $request->user()->id,
-        ]);
-
-        if ($request->wantsJson()) {
-            return response()->json(['client' => $client->fresh()]);
-        }
-
-        return back()->with('success', 'Numero historico actualizado.');
     }
 
     /**

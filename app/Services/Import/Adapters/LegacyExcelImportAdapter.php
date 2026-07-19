@@ -77,7 +77,12 @@ class LegacyExcelImportAdapter extends AbstractSingleSheetAdapter
                     '2026',
                 ),
                 amountCollected: ImportNumberParser::toNullableFloat($get('dinero cobrado')),
-                paymentMethodHint: ImportNumberParser::toBool($get('mercado pago si/no')) ? 'mercado_pago' : 'efectivo',
+                // "Mercado Pago" no existe como medio de pago independiente en
+                // el modelo de datos (se unifico con Transferencia, ver
+                // ImportService::persist() y la migracion de normalizacion);
+                // un pago marcado como Mercado Pago en el Excel historico se
+                // registra directamente como 'transferencia'.
+                paymentMethodHint: ImportNumberParser::toBool($get('mercado pago si/no')) ? 'transferencia' : 'efectivo',
                 orderStatus: null,
                 withdrawalStatus: null,
             );

@@ -82,13 +82,19 @@ class LocroRoverExcelImportAdapter extends AbstractSingleSheetAdapter
         return $rows;
     }
 
+    /**
+     * "Mercado Pago" no existe como medio de pago independiente en el modelo
+     * de datos (se unifico con Transferencia, ver ImportService::persist() y
+     * la migracion de normalizacion): cualquier valor equivalente se
+     * convierte automaticamente en 'transferencia'.
+     */
     private function paymentMethodSlug(?string $value): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        return mb_strtolower(trim($value), 'UTF-8') === 'mercado pago' ? 'mercado_pago' : 'efectivo';
+        return mb_strtolower(trim($value), 'UTF-8') === 'mercado pago' ? 'transferencia' : 'efectivo';
     }
 
     private function orderStatus(?string $value): ?string
