@@ -78,4 +78,62 @@ class SauceParameterRecalculationTest extends TestCase
         $saucesItem->refresh();
         $this->assertSame(4, $saucesItem->quantity); // 4 porciones / 1 = 4 salsas, ya no 2
     }
+
+    /**
+     * Reproduce el reporte "despues del fix, todas las salsas pasan a 0":
+     * un pedido IMPORTADO (RowTransformer::toOrderItemsAttributes) crea su
+     * linea de 'locro' con type='personalizado' a proposito (para blindarla
+     * de todo recalculo de precio, ver docblock de esa clase), pero SI trae
+     * una linea 'salsas' type='normal' con la cantidad real importada.
+     */
+    public function test_recalculate_does_not_zero_out_sauces_for_imported_orders_with_personalizado_locro_line(): void
+    {
+        $admin = $this->makeAdmin();
+        $year = Year::where('year', 2026)->firstOrFail();
+
+        $client = Client::create(['first_name' => 'Test', 'last_name' => 'Imported']);
+        $order = Order::create([
+            'client_id' => $client->id,
+            'year_id' => $year->id,
+            'rover_id' => $admin->id,
+            'created_by' => $admin->id,
+            'updated_by' => $admin->id,
+            'take_away' => true,
+        ]);
+        // Igual que RowTransformer::toOrderItemsAttributes: locro con type=personalizado.
+        $order->items()->create([
+            'product' => 'locro',
+            'type' => 'personalizado',
+            'description' => 'Importado',
+            'quantity' => 4,
+            'unit_price' => '15000.00',
+            'line_total' => '60000.00',
+            'created_by' => $admin->id,
+        ]);
+        $order->items()->create([
+            'product' => 'salsas',
+            'type' => 'normal',
+            'quantity' => 2,
+            'unit_price' => '0.00',
+            'line_total' => '0.00',
+            'created_by' => $admin->id,
+        ]);
+        $order->recalculateTotals();
+
+        $response = $this->actingAs($admin)->put("/years/{$year->id}", [
+            'label' => $year->label,
+            'portion_price' => $year->portion_price,
+            'made_portions' => $year->made_portions,
+            'sauce_portions_per_block' => 1,
+            'sauce_units_per_block' => 1,
+            'recalculate_orders' => true,
+        ]);
+
+        $response->assertRedirect();
+
+        $saucesItem = $order->items()->where('product', 'salsas')->first();
+        // 4 porciones (en una linea 'personalizado') / 1 = 4 salsas.
+        // No debe quedar en 0 solo porque esa linea no es 'normal'/'promocion'.
+        $this->assertSame(4, $saucesItem->quantity);
+    }
 }
