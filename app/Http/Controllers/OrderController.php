@@ -54,9 +54,38 @@ class OrderController extends Controller
         // gifted_portions/lost_portions (ver compactCounters mas abajo).
         $canViewProduction = $user->can('produccion.ver');
 
+        // Fase P2 (correccion de orden): antes se ordenaba por created_at
+        // DESC (orden cronologico de carga), que con el import historico
+        // masivo generaba bloques que PARECIAN alfabeticos por casualidad
+        // (el Excel de origen ya venia ordenado por apellido y las filas se
+        // insertan una a una en ese mismo orden durante el import, asi que
+        // sus created_at terminaban en esa misma secuencia), pero se rompian
+        // en cuanto se mezclaban con pedidos cargados en vivo (con
+        // created_at real, sin relacion con el apellido) o con otra tanda de
+        // import corrida en otro momento (otro bloque "alfabetico" propio).
+        // Ahora se ordena explicitamente por apellido/nombre del cliente,
+        // resuelto ACA en SQL (no en Vue) via un LEFT JOIN a `clients` +
+        // select('orders.*') (evita que las columnas de `clients` pisen las
+        // de `orders` con el mismo nombre, ej. id/created_at, al hidratar el
+        // modelo). Los filtros/busqueda/ausencia de paginacion de mas abajo
+        // siguen aplicando sobre esta misma query, sin cambios.
+        $lastNameSort = $this->clientNameSortExpression('clients.last_name');
+        $firstNameSort = $this->clientNameSortExpression('clients.first_name');
+        // Grupo de orden: 0) placeholder de import con apellido faltante
+        // (ver RowTransformer::MISSING_NAME_PLACEHOLDER, se guarda como
+        // "Completar" tras Client::normalizeName) SIEMPRE primero; 1)
+        // apellidos que, ya normalizados, no arrancan con una letra a-z
+        // (simbolos sueltos, numeros, vacio); 2) el resto, alfabetico normal.
+        $nameSortGroup = "case ".
+            "when {$lastNameSort} = 'completar' then 0 ".
+            "when {$lastNameSort} = '' or substr({$lastNameSort}, 1, 1) not between 'a' and 'z' then 1 ".
+            'else 2 end';
+
         $orders = Order::query()
+            ->select('orders.*')
+            ->leftJoin('clients', 'clients.id', '=', 'orders.client_id')
             ->with(['client:id,first_name,last_name,phone', 'rover:id,name', 'withdrawnBy:id,name', 'items', 'payments'])
-            ->where('year_id', $year->id)
+            ->where('orders.year_id', $year->id)
             ->when(! $canViewAll, fn ($q) => $q->where('rover_id', $user->id))
             ->when($canViewAll && $request->filled('rover_id'), fn ($q) => $q->where('rover_id', $request->get('rover_id')))
             ->when($request->filled('withdrawal_status'), fn ($q) => $q->where('withdrawal_status', $request->get('withdrawal_status')))
@@ -121,7 +150,12 @@ class OrderController extends Controller
             ->when($request->boolean('pay_transferencia'), function ($q) {
                 $q->whereHas('payments', fn ($pq) => $pq->whereHas('method', fn ($mq) => $mq->where('slug', 'transferencia')));
             })
-            ->orderByDesc('created_at')
+            ->orderByRaw("{$nameSortGroup} asc")
+            ->orderByRaw("{$lastNameSort} asc")
+            ->orderByRaw("{$firstNameSort} asc")
+            // Desempate estable: mismo apellido+nombre no debe "saltar" de
+            // lugar entre cargas de pagina.
+            ->orderBy('orders.id')
             // Fase P2 (UX): se elimina la paginacion a pedido explicito del
             // usuario (volver al comportamiento de "una sola lista larga" de
             // la pagina anterior). $orders pasa a ser una Collection comun en
@@ -185,6 +219,33 @@ class OrderController extends Controller
             // con sus propios pedidos).
             'roverRanking' => $canViewAll ? $this->roverRanking($year) : null,
         ]);
+    }
+
+    /**
+     * Fase P2 (correccion de orden): expresion SQL que normaliza una columna
+     * de nombre de cliente (apellido o nombre) para poder compararla/
+     * ordenarla ignorando mayusculas y acentos, ver docblock de index().
+     *
+     * SQLite no trae collation Unicode por defecto: su lower() solo pliega
+     * ASCII a-z y deja intactas las vocales acentuadas (Á/á, É/é, etc.), asi
+     * que hay que reemplazarlas explicitamente por su equivalente sin acento
+     * ANTES de que lower() se encargue del resto (mayusculas ASCII simples).
+     * ñ/Ñ se pliega a "n" con el mismo criterio (orden practico, no
+     * alfabetico RAE estricto) para no crear un grupo aparte de una sola
+     * letra. coalesce(...,'') cubre el caso defensivo de un cliente
+     * inexistente (LEFT JOIN sin match).
+     */
+    private function clientNameSortExpression(string $column): string
+    {
+        $accentMap = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n'];
+
+        $expr = "coalesce({$column}, '')";
+        foreach ($accentMap as $accented => $plain) {
+            $expr = "replace({$expr}, '{$accented}', '{$plain}')";
+            $expr = "replace({$expr}, '".mb_strtoupper($accented, 'UTF-8')."', '{$plain}')";
+        }
+
+        return "lower({$expr})";
     }
 
     /**
