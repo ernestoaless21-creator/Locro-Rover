@@ -260,22 +260,41 @@ class PricingService
      *      elige explicitamente "Guardar y recalcular pedidos" en Parametros
      *      (en ese caso $newYear es el MISMO year del pedido, con params nuevos).
      * 'regalo' y 'personalizado' NUNCA se tocan (excepciones manuales), ni
-     * tampoco la cantidad (quantity) de cada linea: solo unit_price/line_total.
+     * tampoco la cantidad (quantity) de las lineas de locro: solo
+     * unit_price/line_total.
+     *
+     * EXCEPCION: la linea 'salsas' SI tiene su quantity recalculada aca. A
+     * diferencia de 'locro' (cuya quantity es una decision manual del
+     * usuario -- la cantidad de porciones que pidio), la quantity de
+     * 'salsas' es un valor 100% DERIVADO de portions + la configuracion de
+     * la edicion (calculateSauces). Si cambia esa configuracion (Parametros)
+     * y no se recalcula tambien esta linea, "Guardar y recalcular pedidos"
+     * deja la cantidad de salsas de TODOS los pedidos existentes desactualizada
+     * para siempre, aunque el precio si se haya recalculado -- ese fue el bug
+     * original que motivo este comentario.
      */
     public function recalculatePricedLinesForOrder(Order $order, Year $newYear): void
     {
-        OrderItem::withoutEvents(function () use ($order, $newYear) {
+        $primaryPortions = 0;
+
+        OrderItem::withoutEvents(function () use ($order, $newYear, &$primaryPortions) {
             $order->items()
                 ->whereIn('type', ['normal', 'promocion'])
                 ->where('product', self::PRICED_PRODUCT)
                 ->get()
-                ->each(function (OrderItem $item) use ($newYear) {
+                ->each(function (OrderItem $item) use ($newYear, &$primaryPortions) {
                     $result = $this->calculateLine($item->product, $item->type, $item->quantity, $newYear);
                     $item->forceFill([
                         'unit_price' => $result['unit_price'],
                         'line_total' => $result['line_total'],
                     ])->save();
+                    $primaryPortions += $item->quantity;
                 });
+
+            $saucesItem = $order->items()->where('product', self::SAUCES_PRODUCT)->where('type', 'normal')->first();
+            if ($saucesItem) {
+                $saucesItem->update(['quantity' => $this->calculateSauces($primaryPortions, $newYear)]);
+            }
         });
 
         $order->recalculateTotals();
