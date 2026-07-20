@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Order;
 use App\Models\User;
@@ -98,6 +99,8 @@ class ClientAssignmentService
             $this->syncResponsibleForClientYear($order->client_id, $order->year_id, $order->rover_id, $actingUserId);
         }
 
+        $this->reactivateClientIfActiveEdition($order);
+
         $assignment = ClientAssignment::firstOrNew([
             'client_id' => $order->client_id,
             'year_id' => $order->year_id,
@@ -113,6 +116,37 @@ class ClientAssignmentService
         $assignment->save();
 
         return $assignment->refresh();
+    }
+
+    /**
+     * Reactivacion automatica (decision de arquitectura, ver informe de la
+     * correccion "gestion de clientes"): un cliente inactivo vuelve a
+     * is_active=true SOLO cuando el pedido que dispara este sync pertenece a
+     * la edicion ACTIVA -- nunca a una historica. Cubre con una unica
+     * condicion los dos casos que NO deben reactivar a nadie: una
+     * importacion historica (HistoricalImportController/ImportService, que
+     * puede apuntar a cualquier año) y una carga/correccion manual de un
+     * pedido en una edicion pasada (OrderController::store con
+     * 'anios.gestionar'). Ambos representan reconstruccion de hechos del
+     * pasado, no una relacion comercial nueva. UPDATE condicional directo
+     * (no carga el modelo Client): es un no-op si el cliente ya estaba
+     * activo, sin instanciar/guardar una fila que no cambia.
+     */
+    private function reactivateClientIfActiveEdition(Order $order): void
+    {
+        if (! $order->year()->value('is_active')) {
+            return;
+        }
+
+        Client::query()
+            ->where('id', $order->client_id)
+            ->where('is_active', false)
+            ->update([
+                'is_active' => true,
+                'deactivated_at' => null,
+                'deactivated_by' => null,
+                'deactivation_reason' => null,
+            ]);
     }
 
     /**
@@ -132,13 +166,16 @@ class ClientAssignmentService
     }
 
     /**
-     * Seccion 8: "Generar asignaciones desde edicion anterior". Copia TODAS
-     * las asignaciones de $from a $to (no solo las de clientes que
-     * compraron). Si el responsable original sigue activo, se conserva; si
-     * esta inactivo, la nueva asignacion queda sin responsable. Nunca
-     * duplica ni sobreescribe una asignacion cliente/anio que ya exista en
-     * destino (idempotente). Solo copia la asignacion en si: NO copia
-     * pedidos, pagos, importes ni porciones.
+     * Seccion 8: "Generar asignaciones desde edicion anterior". Copia las
+     * asignaciones de $from a $to de clientes con is_active=true (no solo las
+     * de clientes que compraron, pero SI excluye a los que se marcaron fuera
+     * de la base activa -- ver Client::deactivate: es exactamente el
+     * mecanismo automatico que ese estado esta pensado para frenar). Si el
+     * responsable original sigue activo, se conserva; si esta inactivo, la
+     * nueva asignacion queda sin responsable. Nunca duplica ni sobreescribe
+     * una asignacion cliente/anio que ya exista en destino (idempotente).
+     * Solo copia la asignacion en si: NO copia pedidos, pagos, importes ni
+     * porciones.
      *
      * @return array{total_origin:int, kept_responsible:int, unassigned_inactive:int, already_existed:int}
      */
@@ -146,6 +183,7 @@ class ClientAssignmentService
     {
         $sourceAssignments = ClientAssignment::query()
             ->where('year_id', $from->id)
+            ->whereHas('client', fn ($q) => $q->where('is_active', true))
             ->get(['client_id', 'assigned_user_id']);
 
         $existingClientIds = ClientAssignment::query()

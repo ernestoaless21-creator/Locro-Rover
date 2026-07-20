@@ -9,12 +9,19 @@
  *
  * Permisos (seccion 2): cualquier usuario con 'clientes.ver' puede ver, buscar,
  * ver historial, corregir nombre/apellido/telefono/notas y actualizar el
- * seguimiento. Transferir responsable, accion masiva y generar desde edicion
- * anterior quedan reservados a Logistica/Jefe de Logistica/Admin
- * (canTransfer/canBulk/canGenerate recibidos del backend). El numero
- * historico es un campo de SOLO LECTURA para todos: se asigna
- * automaticamente al crear el cliente y ya no se puede editar manualmente
- * (ver ClientController@store / Client::createWithAutoHistoricalNumber).
+ * seguimiento. Transferir responsable, accion masiva, generar desde edicion
+ * anterior y desactivar/reactivar un cliente (ver Client::deactivate) quedan
+ * reservados a Logistica/Jefe de Logistica/Admin (canTransfer/canBulk/
+ * canGenerate recibidos del backend). El numero historico es un campo de
+ * SOLO LECTURA para todos: se asigna automaticamente al crear el cliente y
+ * ya no se puede editar manualmente (ver ClientController@store /
+ * Client::createWithAutoHistoricalNumber).
+ *
+ * "Desactivar"/"Reactivar" (ex "Quitar de la edicion") NO dependen de
+ * canMutateYear: is_active es una propiedad global del cliente, no de la
+ * edicion que se esta mirando (a diferencia de autoasignarse/transferir/
+ * seguimiento, que si son "por edicion" y quedan bloqueados en una edicion
+ * historica).
  */
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, computed, watch } from 'vue'
@@ -174,7 +181,7 @@ function toggleSelectAll() {
 async function bulkDelete() {
   if (selected.value.size === 0) return
   const count = selected.value.size
-  if (!confirm(`¿Eliminar ${count} cliente(s) seleccionado(s) definitivamente? Un cliente con pedidos registrados no se puede eliminar (se puede quitar de esta edicion en su lugar).`)) {
+  if (!confirm(`¿Eliminar ${count} cliente(s) seleccionado(s) definitivamente? Un cliente con pedidos registrados no se puede eliminar (se puede desactivar en su lugar).`)) {
     return
   }
 
@@ -198,12 +205,25 @@ function destroyOne(client) {
   })
 }
 
-function removeFromYear(client) {
-  if (!confirm(`¿Quitar a ${client.first_name} ${client.last_name ?? ''} de ${props.year.label || props.year.year}? Esto no borra al cliente ni su historial, solo la asignacion de esta edicion.`)) return
-  router.delete(`/clients/${client.id}/assignment`, {
-    data: { year_id: props.year.id },
+// Reemplaza "Quitar de la edicion" (ver informe de la correccion de
+// arquitectura: esa accion quedaba deshecha por el backfill automatico en
+// la siguiente carga). No borra nada: solo saca al cliente de la base
+// activa, global a todas las ediciones futuras, sin tocar su historial.
+function deactivateClient(client) {
+  if (!confirm(`¿Marcar a ${client.first_name} ${client.last_name ?? ''} como fuera de la base activa? No se borra nada de su historial; solo deja de generársele seguimiento automático en próximas ediciones.`)) return
+  const reason = prompt('Motivo (opcional, por ejemplo "pidió no ser contactado" o "se mudó"):') ?? ''
+  router.post(`/clients/${client.id}/deactivate`, { reason: reason.trim() || undefined }, {
     preserveScroll: true,
-    onSuccess: () => toast.success('Cliente quitado de la edicion.'),
+    onSuccess: () => toast.success('Cliente desactivado.'),
+    onError: () => toast.error('No se pudo desactivar.'),
+  })
+}
+
+function reactivateClient(client) {
+  router.post(`/clients/${client.id}/reactivate`, {}, {
+    preserveScroll: true,
+    onSuccess: () => toast.success('Cliente reactivado.'),
+    onError: () => toast.error('No se pudo reactivar.'),
   })
 }
 
@@ -483,12 +503,16 @@ function exportUrl() {
               v-for="client in clients"
               :key="client.id"
               class="border-t border-gray-800 hover:bg-gray-800/60"
+              :class="{ 'opacity-50': !client.is_active }"
             >
               <td v-if="canBulk" class="p-2">
                 <input type="checkbox" :checked="selected.has(client.id)" @change="toggleSelected(client.id)" />
               </td>
               <td class="p-2">{{ client.historical_number ?? '—' }}</td>
-              <td class="p-2">{{ client.last_name }}</td>
+              <td class="p-2">
+                {{ client.last_name }}
+                <span v-if="!client.is_active" class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-900 text-red-200" :title="client.deactivation_reason || ''">Inactivo</span>
+              </td>
               <td class="p-2">{{ client.first_name }}</td>
               <td class="p-2">{{ client.phone }}</td>
               <td class="p-2 text-gray-300">{{ client.last_purchase_year ?? 'Nunca' }}</td>
@@ -557,7 +581,8 @@ function exportUrl() {
                     class="text-gray-300 hover:text-white text-xs"
                     @click="openEdit(client)"
                   >Editar</button>
-                  <button v-if="canTransfer && canMutateYear" type="button" class="text-yellow-400 hover:text-yellow-300 text-xs" @click="removeFromYear(client)">Quitar de la edición</button>
+                  <button v-if="canTransfer && client.is_active" type="button" class="text-yellow-400 hover:text-yellow-300 text-xs" @click="deactivateClient(client)">Desactivar</button>
+                  <button v-if="canTransfer && !client.is_active" type="button" class="text-green-400 hover:text-green-300 text-xs" @click="reactivateClient(client)">Reactivar</button>
                   <button v-if="can('clientes.eliminar')" type="button" class="text-red-400 hover:text-red-300 text-xs" @click="destroyOne(client)">Eliminar</button>
                 </div>
               </td>

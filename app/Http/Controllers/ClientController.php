@@ -110,18 +110,27 @@ class ClientController extends Controller
             // solo trae las filas que matchean, no toda la tabla.
             ->get();
 
-        // Garantiza que cada cliente listado tenga asignacion para $year (ver
-        // docblock de arriba). insertOrIgnore en un solo INSERT (no un loop
-        // de N firstOrCreate): sigue siendo una unica consulta de escritura
-        // sin importar cuantos clientes falten, y si dos requests concurrentes
-        // llegaran a pisarse la unique(client_id,year_id) de la tabla lo
-        // ignora en vez de tirar un error de integridad.
+        // Garantiza que cada cliente ACTIVO listado tenga asignacion para
+        // $year (ver docblock de arriba). insertOrIgnore en un solo INSERT
+        // (no un loop de N firstOrCreate): sigue siendo una unica consulta de
+        // escritura sin importar cuantos clientes falten, y si dos requests
+        // concurrentes llegaran a pisarse la unique(client_id,year_id) de la
+        // tabla lo ignora en vez de tirar un error de integridad.
+        //
+        // Clientes con is_active=false quedan afuera de este backfill a
+        // proposito (ver Client::deactivate): no se les debe generar trabajo
+        // de contacto automaticamente hacia ediciones futuras. Si ya tenian
+        // una asignacion de una edicion anterior (o de esta misma, creada
+        // antes de desactivarse), esa fila NO se toca ni se borra: sigue
+        // apareciendo intacta, esto solo evita CREAR una nueva.
+        $activeClientIds = $clients->where('is_active', true)->pluck('id');
+
         $existingClientIds = ClientAssignment::query()
             ->where('year_id', $year->id)
-            ->whereIn('client_id', $clients->pluck('id'))
+            ->whereIn('client_id', $activeClientIds)
             ->pluck('client_id');
 
-        $missingClientIds = $clients->pluck('id')->diff($existingClientIds);
+        $missingClientIds = $activeClientIds->diff($existingClientIds);
         if ($missingClientIds->isNotEmpty()) {
             $now = now();
             ClientAssignment::insertOrIgnore($missingClientIds->map(fn ($clientId) => [
@@ -307,30 +316,41 @@ class ClientController extends Controller
     }
 
     /**
-     * Fase 7, seccion 2: "Quitar un cliente de una edicion" (distinto de
-     * eliminar definitivamente el registro maestro, ver destroy()). Borra
-     * UNICAMENTE la asignacion anual de este cliente para esta edicion; no
-     * toca el cliente, sus pedidos ni su historial de otras ediciones. Solo
-     * Logistica/Jefe de Logistica/Admin (mismo permiso que transferir).
+     * Reemplaza "Quitar de la edicion" (ver informe de la correccion de
+     * arquitectura: borrar la asignacion anual quedaba deshecho por el
+     * backfill automatico de index() en la siguiente carga, ademas de ser
+     * una accion por-edicion para algo que en la practica es una propiedad
+     * global del cliente). Marca al cliente como fuera de la base activa: no
+     * borra ni toca pedidos ni asignaciones de NINGUNA edicion (pasada o
+     * presente), solo deja de generarsele trabajo de contacto automatico
+     * hacia ediciones futuras (ver backfill de index() y
+     * ClientAssignmentService::generateFromPreviousYear).
      */
-    public function removeFromYear(Request $request, Client $client): RedirectResponse
+    public function deactivate(Request $request, Client $client): RedirectResponse
     {
-        $year = Year::findOrFail($request->integer('year_id'));
-        Gate::authorize('mutate', $year);
+        Gate::authorize('deactivate', $client);
 
-        $assignment = ClientAssignment::where('client_id', $client->id)
-            ->where('year_id', $year->id)
-            ->first();
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
 
-        // Mismo permiso que transferir (accion administrativa de Logistica/
-        // Jefe de Logistica/Admin, ver ClientAssignmentPolicy::transfer).
-        // Si la asignacion no existe todavia, se autoriza igual sobre una
-        // instancia nueva (misma regla: requiere 'asignaciones.transferir').
-        Gate::authorize('transfer', $assignment ?? new ClientAssignment(['client_id' => $client->id, 'year_id' => $year->id]));
+        $client->deactivate($request->user()->id, $data['reason'] ?? null);
 
-        $assignment?->delete();
+        return back()->with('success', 'Cliente desactivado.');
+    }
 
-        return back()->with('success', 'Cliente quitado de la edicion.');
+    /**
+     * Reactivacion MANUAL (boton "Reactivar"). La reactivacion automatica
+     * por pedido real vive en ClientAssignmentService::syncFromOrder (solo
+     * cuando el pedido pertenece a la edicion activa), no aca.
+     */
+    public function reactivate(Client $client): RedirectResponse
+    {
+        Gate::authorize('reactivate', $client);
+
+        $client->reactivate();
+
+        return back()->with('success', 'Cliente reactivado.');
     }
 
     /**

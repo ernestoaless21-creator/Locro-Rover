@@ -64,6 +64,23 @@ class ClientPolicy
     }
 
     /**
+     * Reemplaza el permiso que antes gateaba "Quitar de la edicion"
+     * (ClientAssignmentPolicy::transfer, exclusivo de Logistica/Jefe de
+     * Logistica/Admin via 'asignaciones.transferir'). Desactivar/reactivar
+     * es una accion operativa de uso frecuente (no destructiva, reversible),
+     * asi que reusa el mismo permiso en vez de sumar uno nuevo redundante.
+     */
+    public function deactivate(User $user, Client $client): bool
+    {
+        return $user->can('asignaciones.transferir');
+    }
+
+    public function reactivate(User $user, Client $client): bool
+    {
+        return $user->can('asignaciones.transferir');
+    }
+
+    /**
      * Eliminacion masiva: mismo permiso que eliminar individual, pero se
      * evalua explicitamente en el Controller antes de aplicar el soft delete
      * a cada uno de los IDs recibidos (nunca se confia en que el frontend

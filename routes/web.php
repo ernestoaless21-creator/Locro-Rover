@@ -142,8 +142,11 @@ Route::middleware([
     Route::put('/clients/{client}/assignment/contact', [ClientController::class, 'updateContactForYear'])
         ->name('clients.assignment.contact.update');
 
-    Route::delete('/clients/{client}/assignment', [ClientController::class, 'removeFromYear'])
-        ->name('clients.assignment.remove');
+    Route::post('/clients/{client}/deactivate', [ClientController::class, 'deactivate'])
+        ->name('clients.deactivate');
+
+    Route::post('/clients/{client}/reactivate', [ClientController::class, 'reactivate'])
+        ->name('clients.reactivate');
 
     Route::delete('/clients/{client}', [ClientController::class, 'destroy'])
         ->name('clients.destroy');

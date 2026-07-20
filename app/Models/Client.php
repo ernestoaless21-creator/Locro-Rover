@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\QueryException;
@@ -16,6 +17,12 @@ class Client extends Model
     protected $fillable = [
         'first_name', 'last_name', 'phone', 'address', 'postal_code',
         'general_notes', 'historical_number', 'created_by', 'updated_by',
+        'is_active', 'deactivated_at', 'deactivated_by', 'deactivation_reason',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'deactivated_at' => 'datetime',
     ];
 
     public function orders(): HasMany
@@ -51,6 +58,55 @@ class Client extends Model
     public function observationsForYear(int $yearId): HasMany
     {
         return $this->observations()->where('year_id', $yearId);
+    }
+
+    public function deactivatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deactivated_by');
+    }
+
+    /**
+     * Reemplaza "Quitar de la edicion" (ver informe de la correccion:
+     * client_year_assignments->delete() quedaba deshecho por el backfill
+     * automatico en la siguiente carga de /clients). is_active es GLOBAL al
+     * cliente, no por edicion: nunca borra ni toca pedidos/asignaciones
+     * existentes (eso es lo que garantiza no perder historial), solo gatea
+     * los mecanismos AUTOMATICOS de generacion hacia ediciones futuras (ver
+     * ClientController::index y ClientAssignmentService::
+     * generateFromPreviousYear). NO es un global scope (ver scopeActive
+     * abajo): busqueda, importacion e historial siguen viendo clientes
+     * inactivos sin ninguna excepcion especial.
+     */
+    public function deactivate(int $actingUserId, ?string $reason = null): void
+    {
+        $this->forceFill([
+            'is_active' => false,
+            'deactivated_at' => now(),
+            'deactivated_by' => $actingUserId,
+            'deactivation_reason' => $reason,
+        ])->save();
+    }
+
+    /**
+     * Reactivacion manual (boton "Reactivar"). La reactivacion AUTOMATICA por
+     * pedido real vive en ClientAssignmentService::syncFromOrder (unico
+     * punto: solo dispara si el pedido pertenece a la edicion activa, para
+     * que una importacion historica o una correccion manual de una edicion
+     * pasada nunca reactive a nadie).
+     */
+    public function reactivate(): void
+    {
+        $this->forceFill([
+            'is_active' => true,
+            'deactivated_at' => null,
+            'deactivated_by' => null,
+            'deactivation_reason' => null,
+        ])->save();
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 
     public function getFullNameAttribute(): string
