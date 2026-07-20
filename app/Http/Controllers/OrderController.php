@@ -398,7 +398,9 @@ class OrderController extends Controller
             'canExceptionalPrice' => $user->can('pedidos.precio-excepcional'),
             // Fase 18.1: un usuario comun siempre crea en la edicion activa,
             // sin poder elegirla (ver store(), que la fuerza igual del lado
-            // servidor). Solo quien administra ediciones puede elegir otra.
+            // servidor). Solo quien administra ediciones puede elegir otra
+            // (Fase 21: caso de uso real -- cargar a mano un pedido que se
+            // escapo de la importacion historica, sin reimportar todo el Excel).
             'canChooseYear' => $user->can('anios.gestionar'),
             'paymentMethods' => PaymentMethod::where('is_active', true)->get(['id', 'name']),
             'canRegisterPayment' => $user->can('pagos.registrar'),
@@ -423,11 +425,17 @@ class OrderController extends Controller
     {
         $data = $request->validated();
 
-        // Fase 18.1: un usuario sin 'anios.gestionar' siempre crea en la
-        // edicion activa, sin importar que year_id haya mandado el frontend
-        // (que ademas ya no deberia mostrarle un selector, ver
-        // Orders/New.vue). Se fuerza aca tambien del lado servidor: nunca se
-        // confia unicamente en que el frontend oculto el campo.
+        // Fase 21 (correccion): el alta de un pedido nuevo sigue exigiendo
+        // 'anios.gestionar' para poder elegir una edicion distinta de la
+        // activa -- MISMA regla centralizada que el resto de la app
+        // (Year::isEditableBy / Gate::authorize('mutate', $year)), en vez de
+        // una excepcion propia de este endpoint. Caso de uso real: un pedido
+        // se escapa durante la importacion historica (HistoricalImportController)
+        // y admin/jefe de logistica necesita cargarlo a mano en esa edicion
+        // vieja, sin reimportar todo el Excel. Un usuario sin 'anios.gestionar'
+        // sigue sin poder elegir: se ignora cualquier year_id que mande, sin
+        // importar lo que llegue en el payload (nunca se confia en que el
+        // frontend oculto el selector, ver create()).
         $year = $request->user()->can('anios.gestionar')
             ? Year::findOrFail($data['year_id'])
             : Year::where('is_active', true)->firstOrFail();

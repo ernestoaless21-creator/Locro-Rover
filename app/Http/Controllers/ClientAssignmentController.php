@@ -66,6 +66,8 @@ class ClientAssignmentController extends Controller
             'canBulk' => $user->can('asignaciones.masivo'),
             'canGenerate' => $user->can('asignaciones.generar'),
             'canViewFinancials' => $user->can('finanzas.ver'),
+            // Fase 21: gatea el boton "Exportar Excel" (ver ClientAssignmentPolicy::export).
+            'canExport' => $user->can('clientes.exportar'),
         ]);
     }
 

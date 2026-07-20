@@ -65,8 +65,15 @@ class ClientAssignmentPolicy
         return $user->can('asignaciones.masivo');
     }
 
+    /**
+     * Fase 21: exportar expone telefono/direccion (y montos con
+     * 'finanzas.ver') de TODA la base de clientes. Antes reutilizaba
+     * 'asignaciones.ver' (comun a TODOS los roles operativos), lo que
+     * permitia a cualquier usuario activo bajarse el archivo. Permiso propio,
+     * exclusivo de admin/jefe_logistica/logistica (ver seeder).
+     */
     public function export(User $user): bool
     {
-        return $user->can('asignaciones.ver');
+        return $user->can('clientes.exportar');
     }
 }

@@ -38,7 +38,7 @@ class LogisticsImportController extends Controller
         return Inertia::render('Logistics/Import', [
             'team'       => $team,
             'years'      => $years,
-            'targetYear' => $targetYear->only('id', 'year', 'label'),
+            'targetYear' => $targetYear->toBasicArray(),
             'sourceData' => $sourceData,
         ]);
     }

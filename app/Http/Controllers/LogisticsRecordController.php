@@ -44,7 +44,7 @@ class LogisticsRecordController extends Controller
 
         return Inertia::render('Logistics/Index', [
             'team' => $team,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'records' => $records,
             'categories' => LogisticsCategory::orderBy('name')->get(),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),

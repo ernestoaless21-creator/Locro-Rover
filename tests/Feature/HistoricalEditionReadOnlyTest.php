@@ -122,6 +122,33 @@ class HistoricalEditionReadOnlyTest extends TestCase
         $this->assertSame($this->activeYear->id, $order->year_id);
     }
 
+    /**
+     * Fase 21 (correccion): un usuario con 'anios.gestionar' SI puede elegir
+     * explicitamente una edicion historica y crear un pedido nuevo ahi --
+     * caso de uso real: un pedido se escapo durante la importacion historica
+     * (HistoricalImportController) y hace falta cargarlo a mano, sin
+     * reimportar todo el Excel. Mismo criterio centralizado que el resto de
+     * la app (Year::isEditableBy / Gate::authorize('mutate', $year)), sin
+     * excepcion especial para este endpoint.
+     */
+    public function test_user_with_anios_gestionar_can_create_an_order_in_a_historical_edition(): void
+    {
+        $jefe = User::factory()->create(['is_active' => true]);
+        $jefe->assignRole('jefe_logistica');
+        $client = Client::create(['first_name' => 'Cliente', 'last_name' => 'Test']);
+
+        $response = $this->actingAs($jefe)->post('/orders', [
+            'client_id' => $client->id,
+            'year_id' => $this->historicalYear->id,
+            'portions' => 2,
+            'take_away' => true,
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $order = Order::latest('id')->firstOrFail();
+        $this->assertSame($this->historicalYear->id, $order->year_id);
+    }
+
     // ---------- Regalos / Perdidas ----------------------------------------
 
     public function test_operational_user_cannot_modify_a_gift_in_a_historical_edition(): void

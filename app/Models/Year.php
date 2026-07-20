@@ -92,4 +92,32 @@ class Year extends Model
     {
         return $this->is_active || $user->canEditHistoricalEditions();
     }
+
+    /**
+     * Fase 21 (correccion de bug): unica fuente de verdad para el array
+     * MINIMO de campos que necesita CUALQUIER pantalla que reciba un prop
+     * 'year' de identificacion (selector de edicion, y sobre todo
+     * HistoricalEditionBanner.vue / useEditableYear.js -- ambos leen
+     * `year.is_active` para decidir si la edicion es de solo lectura).
+     *
+     * Bug real detectado: varios controladores (Meetings, Cronograma, Mi
+     * Equipo, Compras, Infraestructura, Publicidad, Logistica) armaban este
+     * mismo array a mano con $year->only('id', 'year', 'label') y se
+     * olvidaban 'is_active'. Con ese campo ausente, `Boolean(year?.is_active)`
+     * en useEditableYear.js evalua a `false` SIEMPRE (edicion activa
+     * incluida), y `v-if="!year.is_active"` en HistoricalEditionBanner.vue
+     * es SIEMPRE true: la edicion activa terminaba marcada como historica de
+     * solo lectura para cualquier usuario sin 'anios.gestionar'. No era un
+     * bug de logica (Year::isEditableBy/YearPolicy::mutate ya eran
+     * correctos), sino de datos incompletos viajando al frontend.
+     *
+     * Todo controlador que arme un prop 'year' (o 'targetYear'/similar) para
+     * una pantalla Inertia debe usar este metodo en vez de repetir su propio
+     * ->only(...), para que agregar/sacar un campo de esta lista quede
+     * centralizado en un unico lugar.
+     */
+    public function toBasicArray(): array
+    {
+        return $this->only(['id', 'year', 'label', 'is_active']);
+    }
 }

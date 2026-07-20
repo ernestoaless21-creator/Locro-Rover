@@ -82,7 +82,7 @@ class InfrastructureInventoryController extends Controller
 
         return Inertia::render('Infrastructure/Index', [
             'team' => $team,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'inventoryRows' => $inventoryRows,
             'loans' => $loans,
             'loanSummary' => $loanSummary,

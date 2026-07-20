@@ -48,7 +48,7 @@ class TeamTaskImportController extends Controller
 
         return Inertia::render('Teams/Import', [
             'years'           => $years,
-            'targetYear'      => $targetYear->only('id', 'year', 'label'),
+            'targetYear'      => $targetYear->toBasicArray(),
             'teams'           => $teams,
             'sourceData'      => $sourceData,
             'preselectedTeam' => $preselectedTeam,

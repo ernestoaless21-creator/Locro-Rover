@@ -38,7 +38,7 @@ class PublicityImportController extends Controller
         return Inertia::render('Publicity/Import', [
             'team'       => $team,
             'years'      => $years,
-            'targetYear' => $targetYear->only('id', 'year', 'label'),
+            'targetYear' => $targetYear->toBasicArray(),
             'sourceData' => $sourceData,
         ]);
     }

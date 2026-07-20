@@ -31,7 +31,7 @@ class ScheduleDayController extends Controller
             ->get();
 
         return Inertia::render('Schedule/Index', [
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'days' => $days,
             'scheduleNotes' => $year->schedule_notes,
             'canManage' => $request->user()->can('cronograma.gestionar'),

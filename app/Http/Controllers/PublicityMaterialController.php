@@ -44,7 +44,7 @@ class PublicityMaterialController extends Controller
 
         return Inertia::render('Publicity/Index', [
             'team' => $team,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'materials' => $materials,
             'categories' => PublicityCategory::orderBy('name')->get(),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),

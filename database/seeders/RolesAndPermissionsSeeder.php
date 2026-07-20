@@ -69,11 +69,20 @@ class RolesAndPermissionsSeeder extends Seeder
             'regalos.gestionar',
             'perdidas.gestionar',
             // Fase 6A: asignaciones anuales de clientes / call center.
-            'asignaciones.ver', // ver todas, filtrar, buscar, autoasignarse una libre, actualizar seguimiento, exportar
+            'asignaciones.ver', // ver todas, filtrar, buscar, autoasignarse una libre, actualizar seguimiento
             'asignaciones.transferir', // transferir una asignacion YA asignada a otro usuario
             'asignaciones.numero-historico', // gestionar (crear/editar) el numero historico del cliente
             'asignaciones.generar', // "Generar asignaciones desde edicion anterior"
             'asignaciones.masivo', // asignacion manual masiva + reparto equitativo
+            // Fase 21: exportar el Excel de clientes/asignaciones expone
+            // telefono/direccion (y montos si ademas hay 'finanzas.ver') de
+            // TODA la base de clientes -- antes colaba con 'asignaciones.ver'
+            // (comun a TODOS los roles operativos), permitiendo que cualquier
+            // usuario de Compras/Infraestructura/Publicidad se bajara ese
+            // archivo. Permiso propio (no se reutiliza uno existente) para no
+            // acoplar "exportar datos" a otra capacidad que un admin podria
+            // querer otorgar por separado.
+            'clientes.exportar',
             // Fase 6A: produccion real (elaboradas/regaladas/perdidas/aptas/disponibles)
             // es sensible y NO es lo mismo que 'finanzas.ver' (ver seccion 11).
             'produccion.ver',
@@ -165,6 +174,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'asignaciones.transferir', 'asignaciones.numero-historico',
             'asignaciones.generar', 'asignaciones.masivo',
             'produccion.ver', 'finanzas.ver',
+            'clientes.exportar',
         ];
 
         $admin = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);

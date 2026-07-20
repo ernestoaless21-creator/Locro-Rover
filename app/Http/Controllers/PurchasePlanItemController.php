@@ -45,7 +45,7 @@ class PurchasePlanItemController extends Controller
 
         return Inertia::render('Purchases/Index', [
             'team' => $team,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'items' => $items,
             'products' => PurchaseProduct::with('category')->orderBy('name')->get(),
             'categories' => PurchaseCategory::orderBy('name')->get(),

@@ -38,6 +38,7 @@ const props = defineProps({
   canBulk: { type: Boolean, default: false },
   canGenerate: { type: Boolean, default: false },
   canViewFinancials: { type: Boolean, default: false },
+  canExport: { type: Boolean, default: false },
 })
 
 const page = usePage()
@@ -50,9 +51,11 @@ const canMutateYear = useEditableYear(() => props.year)
 
 // Fase 18: estado vacio contextual (distingue "sin resultados de busqueda/filtro"
 // de "todavia no hay clientes cargados").
-const isFiltering = computed(() => Boolean(props.filters.search || props.filters.client_id || props.filters.my_assigned_clients))
+const isFiltering = computed(() => Boolean(props.filters.search || props.filters.client_id || props.filters.my_assigned_clients || props.filters.assigned_user_id))
 
 const search = ref(props.filters.search ?? '')
+// Fase 21: filtro por "Rover encargado" (ver ClientController::index). Vacio = Todos.
+const assignedUserId = ref(props.filters.assigned_user_id ?? '')
 const suggestions = ref([])
 const showSuggestions = ref(false)
 const suggesting = ref(false)
@@ -383,7 +386,7 @@ function exportUrl() {
         <button type="button" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm" @click="applySearch">
           Buscar
         </button>
-        <a :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm">
+        <a v-if="canExport" :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-md text-sm">
           Exportar Excel
         </a>
         <button v-if="canGenerate" type="button" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded-md text-sm" @click="openGenerateModal">
@@ -401,6 +404,20 @@ function exportUrl() {
         >
           Mis clientes asignados
         </button>
+        <!-- Fase 21: filtro por Rover encargado — durante la venta un cliente
+             puede reasignarse a otro Rover, este filtro evita recorrer toda
+             la lista para encontrar los de un Rover puntual. -->
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs text-gray-400">Rover encargado</label>
+          <select
+            v-model="assignedUserId"
+            class="bg-gray-800 border border-gray-600 rounded-md px-2 py-2 text-sm"
+            @change="reloadWith({ assigned_user_id: assignedUserId || undefined })"
+          >
+            <option value="">Todos</option>
+            <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+          </select>
+        </div>
         <button
           v-if="selected.size > 0 && can('clientes.eliminar')"
           type="button"
@@ -450,6 +467,10 @@ function exportUrl() {
                 <span v-if="filters.sort === 'first_name'">{{ filters.direction === 'asc' ? '▲' : '▼' }}</span>
               </th>
               <th class="p-2 text-left cursor-pointer select-none" @click="sortBy('phone')">Teléfono</th>
+              <!-- Fase 21: solo el AÑO de la ultima compra (no cancelada),
+                   no el historial completo (eso vive en Clientes/Historial,
+                   ver ClientController::history), para no ensanchar la tabla. -->
+              <th class="p-2 text-left">Última compra</th>
               <th class="p-2 text-left">Responsable</th>
               <th class="p-2 text-left">Estado</th>
               <th class="p-2 text-left">Último contacto</th>
@@ -470,6 +491,7 @@ function exportUrl() {
               <td class="p-2">{{ client.last_name }}</td>
               <td class="p-2">{{ client.first_name }}</td>
               <td class="p-2">{{ client.phone }}</td>
+              <td class="p-2 text-gray-300">{{ client.last_purchase_year ?? 'Nunca' }}</td>
               <td class="p-2">
                 <div class="flex items-center gap-1 flex-wrap">
                   <span v-if="client.year_assignment?.assigned_user" class="mr-1">{{ client.year_assignment.assigned_user.name }}</span>
@@ -520,7 +542,11 @@ function exportUrl() {
               <td class="p-2">
                 <div class="flex flex-wrap gap-2">
                   <Link :href="`/clients/${client.id}/history`" class="text-blue-400 hover:text-blue-300 text-xs">Historial</Link>
-                  <a :href="`/orders/create?client_id=${client.id}&year_id=${year.id}`" class="text-blue-400 hover:text-blue-300 text-xs">Crear pedido</a>
+                  <a
+                    v-if="canMutateYear"
+                    :href="`/orders/create?client_id=${client.id}&year_id=${year.id}`"
+                    class="text-blue-400 hover:text-blue-300 text-xs"
+                  >Crear pedido</a>
                   <!-- Fase 18.1: un Rover comun (sin 'asignaciones.transferir')
                        solo puede editar los clientes donde el es el
                        responsable asignado en la edicion activa (ver
@@ -537,7 +563,7 @@ function exportUrl() {
               </td>
             </tr>
             <tr v-if="!clients.length">
-              <td :colspan="canBulk ? 10 : 9" class="p-8 text-center text-gray-500">
+              <td :colspan="canBulk ? 11 : 10" class="p-8 text-center text-gray-500">
                 <template v-if="isFiltering">
                   <p class="text-2xl mb-1">🔎</p>
                   <p>No se encontraron clientes con esa búsqueda o filtro.</p>

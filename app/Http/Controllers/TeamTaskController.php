@@ -45,7 +45,7 @@ class TeamTaskController extends Controller
             'team' => $team,
             'tasks' => $tasks,
             'documents' => $documents,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'canManage' => $request->user()->can('tareas.gestionar-propio-equipo'),
             'canImport' => $request->user()->can('equipos.gestionar-todos'),
         ]);

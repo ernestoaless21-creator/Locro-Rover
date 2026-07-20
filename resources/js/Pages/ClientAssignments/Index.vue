@@ -27,6 +27,7 @@ const props = defineProps({
   canTransfer: { type: Boolean, default: false },
   canBulk: { type: Boolean, default: false },
   canGenerate: { type: Boolean, default: false },
+  canExport: { type: Boolean, default: false },
   canViewFinancials: { type: Boolean, default: false },
 })
 
@@ -228,7 +229,7 @@ function exportUrl() {
           <span class="text-[10px]">{{ showFilters ? '▲' : '▼' }}</span>
         </button>
 
-        <a :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm ml-auto">Exportar Excel</a>
+        <a v-if="canExport" :href="exportUrl()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-md text-sm ml-auto">Exportar Excel</a>
         <button v-if="canGenerate" type="button" @click="openGenerateModal" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-md text-sm">
           Generar desde edición anterior
         </button>
@@ -343,7 +344,11 @@ function exportUrl() {
                 />
               </td>
               <td class="p-2">
-                <a :href="`/orders/create?client_id=${a.client.id}&year_id=${year.id}`" class="text-blue-400 hover:underline text-xs">
+                <a
+                  v-if="canMutateYear"
+                  :href="`/orders/create?client_id=${a.client.id}&year_id=${year.id}`"
+                  class="text-blue-400 hover:underline text-xs"
+                >
                   Crear pedido
                 </a>
               </td>

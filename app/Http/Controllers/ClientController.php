@@ -7,12 +7,14 @@ use App\Http\Requests\StoreClientRequest;
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
 use App\Models\ClientAssignment;
+use App\Models\Order;
 use App\Models\User;
 use App\Models\Year;
 use App\Services\ClientAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -71,6 +73,22 @@ class ClientController extends Controller
             // contra telefono, asi que un N° historico corto podia traer de
             // rebote clientes cuyo telefono contuviera esa secuencia.
             ->when($request->filled('client_id'), fn ($query) => $query->where('id', $request->get('client_id')))
+            // Fase 21: filtro por "Rover encargado" — un cliente puede
+            // reasignarse a otro Rover durante la venta (el original dejo de
+            // llamarlo), asi que este filtro busca DENTRO de los clientes
+            // asignados a un usuario puntual en la edicion seleccionada, en
+            // vez de tener que recorrer toda la lista. Mismo criterio que ya
+            // usa ClientAssignmentController::index (?assigned_user_id=).
+            // Convive con 'search' (ambos son ->when() sobre la misma query,
+            // se combinan con AND) y con 'my_assigned_clients' de abajo (ese
+            // es el atajo "a mi mismo", este permite elegir cualquier rover).
+            ->when($request->filled('assigned_user_id'), function ($query) use ($year, $request) {
+                $query->whereIn('id', ClientAssignment::query()
+                    ->where('year_id', $year->id)
+                    ->where('assigned_user_id', $request->get('assigned_user_id'))
+                    ->select('client_id')
+                );
+            })
             // Fase 8 (correccion): "Mis clientes asignados" — clientes que
             // tienen assigned_user_id = auth user en client_year_assignments
             // para la edicion seleccionada.
@@ -122,8 +140,25 @@ class ClientController extends Controller
             ->get()
             ->keyBy('client_id');
 
-        $clients->transform(function (Client $client) use ($assignments) {
+        // Fase 21: "Ultima compra" en la tabla, sin traer el historial
+        // completo (eso sigue viviendo solo en Clients/History, ver
+        // ClientController::history). Se resuelve con UNA sola consulta
+        // agregada (MAX(year) por client_id sobre pedidos NO cancelados,
+        // mismo criterio de "pedido valido" que compactCounters/roverRanking/
+        // export en OrderController/ClientAssignmentController), en vez de
+        // consultar por cliente uno a uno (evita N+1 sin importar cuantos
+        // clientes liste la pantalla).
+        $lastPurchaseYears = Order::query()
+            ->join('years', 'years.id', '=', 'orders.year_id')
+            ->select('orders.client_id', DB::raw('MAX(years.year) as last_purchase_year'))
+            ->whereIn('orders.client_id', $clients->pluck('id'))
+            ->where('orders.status', '!=', 'cancelado')
+            ->groupBy('orders.client_id')
+            ->pluck('last_purchase_year', 'orders.client_id');
+
+        $clients->transform(function (Client $client) use ($assignments, $lastPurchaseYears) {
             $client->setRelation('yearAssignment', $assignments->get($client->id));
+            $client->setAttribute('last_purchase_year', $lastPurchaseYears->get($client->id));
 
             return $client;
         });
@@ -134,13 +169,15 @@ class ClientController extends Controller
             'years' => Year::orderByDesc('year')->get(['id', 'year', 'label', 'is_active']),
             'statuses' => ClientAssignment::STATUSES,
             'users' => User::query()->active()->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only('search', 'client_id', 'sort', 'direction', 'my_assigned_clients'),
+            'filters' => $request->only('search', 'client_id', 'sort', 'direction', 'my_assigned_clients', 'assigned_user_id'),
             // Permisos administrativos de asignacion (seccion 2): solo
             // Logistica/Jefe de Logistica/Admin (ver RolesAndPermissionsSeeder).
             'canTransfer' => $user->can('asignaciones.transferir'),
             'canBulk' => $user->can('asignaciones.masivo'),
             'canGenerate' => $user->can('asignaciones.generar'),
             'canViewFinancials' => $user->can('finanzas.ver'),
+            // Fase 21: gatea el boton "Exportar Excel" (ver ClientAssignmentPolicy::export).
+            'canExport' => $user->can('clientes.exportar'),
         ]);
     }
 

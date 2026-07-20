@@ -39,7 +39,7 @@ class ScheduleImportController extends Controller
 
         return Inertia::render('Schedule/Import', [
             'years'      => $years,
-            'targetYear' => $targetYear->only('id', 'year', 'label'),
+            'targetYear' => $targetYear->toBasicArray(),
             'sourceData' => $sourceData,
         ]);
     }

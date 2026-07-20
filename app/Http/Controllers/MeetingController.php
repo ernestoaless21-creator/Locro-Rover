@@ -44,7 +44,7 @@ class MeetingController extends Controller
 
         return Inertia::render('Meetings/Index', [
             'meetings' => $meetings,
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'years' => $years,
             'canManage' => $request->user()->can('actas.gestionar'),
         ]);
@@ -68,7 +68,7 @@ class MeetingController extends Controller
             ->get(['id', 'name', 'team', 'file_name', 'file_size', 'mime_type']);
 
         return Inertia::render('Meetings/Create', [
-            'year' => $year->only('id', 'year', 'label'),
+            'year' => $year->toBasicArray(),
             'activeUsers' => $activeUsers,
             'availableDocuments' => $availableDocuments,
         ]);
@@ -114,7 +114,7 @@ class MeetingController extends Controller
 
         return Inertia::render('Meetings/Show', [
             'meeting' => $this->formatMeeting($meeting),
-            'year' => $meeting->year->only(['id', 'year', 'label', 'is_active']),
+            'year' => $meeting->year->toBasicArray(),
             'decisionCategories' => MeetingDecision::CATEGORIES,
             'decisionTeams' => MeetingDecision::TEAMS,
             'availableDocuments' => $availableDocuments,
@@ -157,7 +157,7 @@ class MeetingController extends Controller
                     'is_present' => $a->is_present,
                 ])->values(),
             ],
-            'year' => $meeting->year->only(['id', 'year', 'label', 'is_active']),
+            'year' => $meeting->year->toBasicArray(),
             'activeUsers' => $allUsers,
         ]);
     }
