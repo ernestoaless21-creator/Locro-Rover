@@ -69,13 +69,41 @@ class Client extends Model
      * Reemplaza "Quitar de la edicion" (ver informe de la correccion:
      * client_year_assignments->delete() quedaba deshecho por el backfill
      * automatico en la siguiente carga de /clients). is_active es GLOBAL al
-     * cliente, no por edicion: nunca borra ni toca pedidos/asignaciones
-     * existentes (eso es lo que garantiza no perder historial), solo gatea
-     * los mecanismos AUTOMATICOS de generacion hacia ediciones futuras (ver
-     * ClientController::index y ClientAssignmentService::
+     * cliente, no por edicion: nunca borra pedidos ni asignaciones de NINGUNA
+     * edicion, pasada o presente (eso es lo que garantiza no perder
+     * historial). La UNICA excepcion (correccion posterior, pedido explicito
+     * del usuario) es el responsable de la asignacion de la edicion ACTIVA:
+     * un cliente inactivo no debe tener un responsable operativo trabajando
+     * su seguimiento, asi que assigned_user_id se limpia ahi (no la fila
+     * entera, ni contact_status/notes/historial de contacto -- eso sigue
+     * intacto). Las asignaciones de ediciones anteriores NUNCA se tocan
+     * (quedan con su responsable de entonces, para auditoria). is_active
+     * tambien gatea los mecanismos AUTOMATICOS de generacion hacia ediciones
+     * futuras (ver ClientController::index y ClientAssignmentService::
      * generateFromPreviousYear). NO es un global scope (ver scopeActive
      * abajo): busqueda, importacion e historial siguen viendo clientes
      * inactivos sin ninguna excepcion especial.
+     *
+     * Decision de arquitectura (correccion posterior, pedido explicito del
+     * usuario): este metodo SOLO persiste los campos propios de Client. NO
+     * resuelve ClientAssignmentService via el contenedor (app(...)) ni toca
+     * ClientAssignment -- el modelo no debe depender del Service Container
+     * de Laravel. Sacar al responsable de la edicion activa (ver
+     * ClientAssignmentService::clearResponsibleForActiveEdition) es
+     * responsabilidad de quien ORQUESTA el caso de uso, hoy
+     * ClientController::deactivate() (inyecta ambas dependencias y las ata
+     * en una transaccion).
+     *
+     * DEUDA TECNICA: esto deja la invariante "un cliente inactivo no tiene
+     * responsable en la edicion activa" sostenida por convencion (todo
+     * llamador de deactivate() debe tambien llamar a
+     * clearResponsibleForActiveEdition()), no garantizada por el tipo. Hoy
+     * el unico llamador es ClientController::deactivate(), que ya hace
+     * ambas cosas. Si en el futuro aparece mas orquestacion de este estilo
+     * para Client, extraer un servicio de aplicacion (ej. ClientService o
+     * una Action dedicada) que sea el UNICO punto de entrada para
+     * desactivar un cliente, en vez de repetir esta dupla en cada
+     * controller/job/comando que necesite desactivar clientes.
      */
     public function deactivate(int $actingUserId, ?string $reason = null): void
     {

@@ -202,6 +202,13 @@ function destroyOne(client) {
   if (!confirm(`¿Eliminar definitivamente a ${client.first_name} ${client.last_name ?? ''}? Esta accion no se puede aplicar si tiene pedidos registrados.`)) return
   router.delete(`/clients/${client.id}`, {
     onSuccess: () => toast.success('Cliente eliminado.'),
+    // Bug real (ver informe de la correccion "boton eliminar no funciona"):
+    // cuando destroy() rechaza por back()->withErrors() (cliente con
+    // pedidos), Inertia SIEMPRE dispara onError (nunca onSuccess) en base a
+    // page.props.errors, sin importar el status HTTP (ver
+    // @inertiajs/core Response.process()). Sin este handler el rechazo
+    // quedaba completamente silenciado: ni toast de exito ni de error.
+    onError: (errors) => toast.error(errors.client || 'No se pudo eliminar al cliente.'),
   })
 }
 
@@ -521,7 +528,7 @@ function exportUrl() {
                   <span v-if="client.year_assignment?.assigned_user" class="mr-1">{{ client.year_assignment.assigned_user.name }}</span>
                   <span v-else class="text-yellow-400 mr-1">Sin asignar</span>
                   <button
-                    v-if="!client.year_assignment?.assigned_user && canMutateYear"
+                    v-if="!client.year_assignment?.assigned_user && canMutateYear && client.is_active"
                     type="button"
                     class="text-blue-400 hover:underline text-xs"
                     @click="selfAssign(client)"
@@ -529,7 +536,7 @@ function exportUrl() {
                     Autoasignarme
                   </button>
                   <select
-                    v-if="canTransfer && canMutateYear"
+                    v-if="canTransfer && canMutateYear && client.is_active"
                     class="bg-gray-800 border border-gray-600 rounded-md px-1 py-0.5 text-xs"
                     :value="''"
                     @change="transfer(client, $event.target.value); $event.target.value = ''"
@@ -537,6 +544,12 @@ function exportUrl() {
                     <option value="" disabled>Transferir a...</option>
                     <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
                   </select>
+                  <!-- Cliente inactivo (ver Client::deactivate): asignarle un
+                       responsable no tiene sentido -- es exactamente el
+                       trabajo de seguimiento que is_active=false esta pensado
+                       para frenar (ver ClientAssignmentPolicy::selfAssign/
+                       transfer, que rechazan esto tambien del lado servidor). -->
+                  <span v-if="!client.is_active" class="text-gray-500 text-xs italic">Inactivo, sin asignar</span>
                 </div>
               </td>
               <td class="p-2">

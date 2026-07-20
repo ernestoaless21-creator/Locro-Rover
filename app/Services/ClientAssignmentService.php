@@ -150,6 +150,29 @@ class ClientAssignmentService
     }
 
     /**
+     * Contraparte de reactivateClientIfActiveEdition(): llamada desde
+     * Client::deactivate() (unico caller). Un cliente inactivo no debe tener
+     * un responsable operativo trabajando su seguimiento en la edicion
+     * ACTIVA -- se le saca (assigned_user_id = null), sin tocar el resto de
+     * la fila (contact_status/notes/historial de contacto quedan igual) ni
+     * ninguna asignacion de una edicion anterior (esas son auditoria, ver
+     * docblock de Client::deactivate).
+     *
+     * Centralizado aca (no en Client) porque este servicio ya es el UNICO
+     * lugar de la app que contiene logica sobre ClientAssignment
+     * (syncFromOrder, generateFromPreviousYear, bulkAssign/bulkDistribute):
+     * Client no debe reimplementar una consulta sobre ClientAssignment/Year
+     * en paralelo a las que ya viven aca.
+     */
+    public function clearResponsibleForActiveEdition(int $clientId, int $actingUserId): void
+    {
+        ClientAssignment::query()
+            ->where('client_id', $clientId)
+            ->whereHas('year', fn ($q) => $q->where('is_active', true))
+            ->update(['assigned_user_id' => null, 'updated_by' => $actingUserId]);
+    }
+
+    /**
      * Fase 7 (correccion): se mantiene por compatibilidad con los llamadores
      * existentes (OrderController::update, OrderBulkController::assignRover),
      * pero ahora delega enteramente en syncResponsibleForClientYear, que
@@ -250,18 +273,22 @@ class ClientAssignmentService
     /**
      * Seccion 9.1/9.2: asignacion manual/masiva. Solo aplica a asignaciones
      * SIN responsable (las que ya tienen uno se transfieren aparte, con
-     * permiso distinto). Devuelve cuantas se asignaron y cuantas se
-     * ignoraron por ya tener responsable.
+     * permiso distinto) y de clientes ACTIVOS (ver Client::deactivate /
+     * ClientAssignmentPolicy::selfAssign: asignarle un responsable a un
+     * cliente fuera de la base activa prestaria a confusion). Devuelve
+     * cuantas se asignaron y cuantas se ignoraron por cualquiera de esos dos
+     * motivos (mismo contador 'skipped', igual que ya hacia antes de sumar
+     * el chequeo de is_active).
      */
     public function bulkAssign(array $assignmentIds, int $targetUserId, int $actingUserId): array
     {
         return DB::transaction(function () use ($assignmentIds, $targetUserId, $actingUserId) {
-            $assignments = ClientAssignment::whereIn('id', $assignmentIds)->get();
+            $assignments = ClientAssignment::whereIn('id', $assignmentIds)->with('client:id,is_active')->get();
             $assigned = 0;
             $skipped = 0;
 
             foreach ($assignments as $assignment) {
-                if ($assignment->assigned_user_id !== null) {
+                if ($assignment->assigned_user_id !== null || ! $assignment->client->is_active) {
                     $skipped++;
 
                     continue;
@@ -287,8 +314,9 @@ class ClientAssignmentService
      * sobrante (si el total no es multiplo exacto de la cantidad de
      * usuarios) queda para los PRIMEROS usuarios de la lista recibida, en
      * ese orden. Ejemplo documentado en el prompt: 17 clientes entre 4
-     * usuarios -> 5,4,4,4 (el primero de la lista recibe el sobrante).
-     * Solo asignaciones SIN responsable participan del reparto.
+     * usuarios -> 5,4,4,4 (el primero de la lista recibe el sobrante). Solo
+     * asignaciones SIN responsable Y de clientes ACTIVOS participan del
+     * reparto (mismo motivo que bulkAssign: ver Client::deactivate).
      */
     public function bulkDistribute(array $assignmentIds, array $userIds, int $actingUserId): array
     {
@@ -309,6 +337,7 @@ class ClientAssignmentService
 
             $assignments = ClientAssignment::whereIn('id', $assignmentIds)
                 ->whereNull('assigned_user_id')
+                ->whereHas('client', fn ($q) => $q->where('is_active', true))
                 ->orderBy('id')
                 ->get();
 

@@ -325,8 +325,19 @@ class ClientController extends Controller
      * presente), solo deja de generarsele trabajo de contacto automatico
      * hacia ediciones futuras (ver backfill de index() y
      * ClientAssignmentService::generateFromPreviousYear).
+     *
+     * Orquestacion (correccion posterior, pedido explicito del usuario):
+     * Client::deactivate() SOLO persiste los campos propios del cliente, sin
+     * resolver ningun servicio via el contenedor. Este metodo es el caso de
+     * uso real: ata esa escritura con
+     * ClientAssignmentService::clearResponsibleForActiveEdition() (saca al
+     * responsable de la edicion activa, ver docblock de ese metodo) dentro
+     * de una misma transaccion. DEUDA TECNICA: si aparece otro llamador que
+     * necesite desactivar un cliente (job, comando, otro controller), debe
+     * repetir esta misma dupla -- el dia que eso pase, corresponde extraer
+     * un servicio de aplicacion dedicado (ver docblock de Client::deactivate).
      */
-    public function deactivate(Request $request, Client $client): RedirectResponse
+    public function deactivate(Request $request, Client $client, ClientAssignmentService $assignments): RedirectResponse
     {
         Gate::authorize('deactivate', $client);
 
@@ -334,7 +345,10 @@ class ClientController extends Controller
             'reason' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $client->deactivate($request->user()->id, $data['reason'] ?? null);
+        DB::transaction(function () use ($request, $client, $assignments, $data) {
+            $client->deactivate($request->user()->id, $data['reason'] ?? null);
+            $assignments->clearResponsibleForActiveEdition($client->id, $request->user()->id);
+        });
 
         return back()->with('success', 'Cliente desactivado.');
     }

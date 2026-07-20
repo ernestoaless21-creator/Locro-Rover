@@ -135,18 +135,63 @@ class ClientDeactivationTest extends TestCase
 
         $client->deactivate($user->id, 'Compra con otra persona');
 
-        // El pedido y la asignacion de la edicion historica siguen intactos.
+        // El pedido y la asignacion de la edicion historica siguen intactos,
+        // CON su responsable original (auditoria: ver Client::deactivate,
+        // solo limpia el responsable de la edicion ACTIVA).
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'client_id' => $client->id]);
         $this->assertDatabaseHas('client_year_assignments', [
             'id' => $assignmentBefore->id,
             'client_id' => $client->id,
             'year_id' => $this->historicalYear->id,
+            'assigned_user_id' => $user->id,
         ]);
 
         // Y el cliente sigue apareciendo en el historial de esa edicion.
         $response = $this->actingAs($user)->get("/clients/{$client->id}/history");
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page->where('client.id', $client->id));
+    }
+
+    /**
+     * Ver ClientController::deactivate(): Client::deactivate() por si solo
+     * ya NO limpia el responsable (el modelo no depende del Service
+     * Container); eso lo orquesta el controlador. Por eso este test pasa
+     * por el endpoint real (el caso de uso), no por el modelo directamente.
+     */
+    public function test_deactivating_clears_the_responsible_only_on_the_active_edition_assignment(): void
+    {
+        $user = $this->makeLogistica();
+        $client = Client::create(['first_name' => 'Uma', 'last_name' => 'Rios']);
+
+        $historicalAssignment = ClientAssignment::create([
+            'client_id' => $client->id,
+            'year_id' => $this->historicalYear->id,
+            'assigned_user_id' => $user->id,
+            'contact_status' => ClientAssignment::STATUS_PEDIDO_REALIZADO,
+        ]);
+        $activeAssignment = ClientAssignment::create([
+            'client_id' => $client->id,
+            'year_id' => $this->activeYear->id,
+            'assigned_user_id' => $user->id,
+            'contact_status' => ClientAssignment::STATUS_INTERESADO,
+            'notes' => 'Dijo que llamaba de vuelta',
+        ]);
+
+        $response = $this->actingAs($user)->post("/clients/{$client->id}/deactivate", [
+            'reason' => 'Pidió no ser contactado',
+        ]);
+        $response->assertSessionHasNoErrors();
+
+        // Edicion ACTIVA: se le saca el responsable (deja de ser trabajo
+        // operativo), pero el resto del seguimiento (estado, notas) NO se toca.
+        $activeAssignment->refresh();
+        $this->assertNull($activeAssignment->assigned_user_id);
+        $this->assertSame(ClientAssignment::STATUS_INTERESADO, $activeAssignment->contact_status);
+        $this->assertSame('Dijo que llamaba de vuelta', $activeAssignment->notes);
+
+        // Edicion historica: intacta, con su responsable de auditoria.
+        $historicalAssignment->refresh();
+        $this->assertSame($user->id, $historicalAssignment->assigned_user_id);
     }
 
     // ---------- Backfill automatico (ClientController::index) ---------------
@@ -328,5 +373,86 @@ class ClientDeactivationTest extends TestCase
 
         $response->assertSessionHasNoErrors();
         $this->assertNotNull($client->fresh()->deleted_at);
+    }
+
+    // ---------- Un cliente inactivo no se puede asignar a un responsable ----
+    // (ver ClientAssignmentPolicy::selfAssign/transfer): prestaria a confusion
+    // que un Rover tenga "asignado" a alguien que no se debe contactar.
+
+    public function test_self_assign_is_blocked_for_inactive_client(): void
+    {
+        $rover = User::factory()->create(['is_active' => true]);
+        $rover->assignRole('logistica');
+
+        $client = Client::create(['first_name' => 'Pilar', 'last_name' => 'Meza']);
+        $client->deactivate($rover->id);
+
+        $response = $this->actingAs($rover)->post("/clients/{$client->id}/assignment/self-assign", [
+            'year_id' => $this->activeYear->id,
+        ]);
+
+        $response->assertForbidden();
+        $this->assertNull(
+            ClientAssignment::where('client_id', $client->id)->where('year_id', $this->activeYear->id)->first()?->assigned_user_id
+        );
+    }
+
+    public function test_transfer_is_blocked_for_inactive_client(): void
+    {
+        $logistica = $this->makeLogistica();
+        $otherRover = User::factory()->create(['is_active' => true]);
+
+        $client = Client::create(['first_name' => 'Quique', 'last_name' => 'Toro']);
+        $client->deactivate($logistica->id);
+
+        $response = $this->actingAs($logistica)->post("/clients/{$client->id}/assignment/transfer", [
+            'assigned_user_id' => $otherRover->id,
+            'year_id' => $this->activeYear->id,
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_self_assign_works_again_once_reactivated(): void
+    {
+        $rover = User::factory()->create(['is_active' => true]);
+        $rover->assignRole('logistica');
+
+        $client = Client::create(['first_name' => 'Rita', 'last_name' => 'Nu']);
+        $client->deactivate($rover->id);
+        $client->reactivate();
+
+        $response = $this->actingAs($rover)->post("/clients/{$client->id}/assignment/self-assign", [
+            'year_id' => $this->activeYear->id,
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(
+            $rover->id,
+            ClientAssignment::where('client_id', $client->id)->where('year_id', $this->activeYear->id)->first()->assigned_user_id
+        );
+    }
+
+    public function test_bulk_assign_skips_inactive_clients(): void
+    {
+        $logistica = $this->makeLogistica();
+        $target = User::factory()->create(['is_active' => true]);
+
+        $active = Client::create(['first_name' => 'Sole', 'last_name' => 'Vega']);
+        $inactive = Client::create(['first_name' => 'Toto', 'last_name' => 'Diaz']);
+        $inactive->deactivate($logistica->id);
+
+        $activeAssignment = ClientAssignment::create(['client_id' => $active->id, 'year_id' => $this->activeYear->id]);
+        $inactiveAssignment = ClientAssignment::create(['client_id' => $inactive->id, 'year_id' => $this->activeYear->id]);
+
+        $response = $this->actingAs($logistica)->postJson('/assignments/bulk-assign', [
+            'assignment_ids' => [$activeAssignment->id, $inactiveAssignment->id],
+            'assigned_user_id' => $target->id,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['assigned' => 1, 'skipped' => 1]);
+        $this->assertSame($target->id, $activeAssignment->fresh()->assigned_user_id);
+        $this->assertNull($inactiveAssignment->fresh()->assigned_user_id);
     }
 }
